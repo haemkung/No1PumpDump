@@ -80,4 +80,4 @@ async function run(){
   state.lastRun=new Date().toISOString();state.scanned=symbols.length;state.failed=failed;await save();
   console.log(JSON.stringify({scanned:symbols.length,sent,failed,aiUsed:state.count,aiCap:MAX,complete:true}));
 }
-try{await run();}catch{state.lastRun=new Date().toISOString();state.error='service_unavailable';try{await save()}catch{}console.error('Scan failed. Check provider access, quota, and Secrets. No credentials logged.');process.exitCode=1;}
+try{await run();}catch(e){state.lastRun=new Date().toISOString();state.error='service_unavailable';try{await save()}catch{}const safe=/^Remote service HTTP \d+$/.test(e.message)?e.message:'service unavailable';console.error('Scan failed: '+safe+'. No credentials logged.');process.exitCode=1;}
