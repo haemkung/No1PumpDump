@@ -13,7 +13,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: crypto-monitor
+  group: no1-crypto-cloud-live
   cancel-in-progress: false
 jobs:
   scan:
@@ -37,3 +37,4 @@ jobs:
           else
             node scanner.mjs
           fi
+
