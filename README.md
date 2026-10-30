@@ -1,17 +1,11 @@
-# Crypto Watch Cloud
+# No1 Crypto Watch Cloud
 
-Experimental Binance USDT perpetual scanner with Gemini review and Telegram alerts.
+Experimental Binance USDT perpetual scanner with Gemini review and Telegram alerts. Standard GitHub Linux runner executes approximately every 15 minutes while the user's PC is off. GitHub schedules can be late or skipped; stale signals are rejected.
 
-Runs on standard GitHub-hosted Linux runners every approximately 15 minutes, including while the owner's computer is off. GitHub schedules can be delayed or skipped. It rejects stale signals rather than pretending to provide real-time monitoring.
+Repository Secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, GEMINI_API_KEY. Do not put values in source. Private state is a pinned no1-monitor-state.json document in the user's existing Telegram Bot chat; no state or alert history is published to GitHub. Do not delete/unpin the state document while monitoring. No unrelated existing pin is replaced during setup.
 
-## Setup
+AI review cap: 50 attempts per Thai calendar day, including failures. Maximum 5 candidates per invocation, sorted by breakout volume ratio. No paid fallback and no exchange trade credentials. Actual Gemini free quota depends on account/provider limits.
 
-Repository Secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, GEMINI_API_KEY. Never commit these values. Initialize state.enc using the Telegram token before the first run. State is AES-256-GCM encrypted; no chat destination or API key is stored in source. Keep the same bot token or migrate/re-encrypt state before rotation.
+The private dashboard reads public workflow status only, not private alerts. Test with node test.mjs. Use workflow_dispatch with test_telegram to verify cloud Telegram delivery.
 
-Maximum 50 AI review attempts per Thai calendar day, including failures. No paid fallback. Free-tier eligibility remains subject to the user's Gemini account plan and provider limits. No auto-trading, no exchange credentials required.
-
-Public source does not contain credentials or plaintext alert history. The dashboard only reads public workflow status. Telegram holds delivered alerts. State is recorded before sending to prevent repeated alerts; a failed/ambiguous send may therefore be missed.
-
-GitHub may disable scheduled workflows after prolonged repository inactivity. Check Actions for failures. Binance may refuse access from some runner locations. No alternative exchange is silently substituted. The current system must not be stopped until a cloud run succeeds.
-
-This strategy has not been backtested or proven profitable. AI approval is qualitative, not a measured win probability. Run `node test.mjs` for strategy checks.
+No auto-trading. Not backtested or proven profitable; model approval is qualitative. GitHub may disable schedules after inactivity, and some runner locations cannot access Binance. Check Actions for failures. Local monitoring must remain available until cloud execution is verified.

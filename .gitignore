@@ -1,0 +1,8 @@
+.env*
+*.xml
+node_modules/
+*.log
+state.json
+quota.json
+runtime.json
+state.enc

@@ -1,0 +1,39 @@
+name: Crypto market scan
+on:
+  schedule:
+    - cron: '1,16,31,46 * * * *'
+  workflow_dispatch:
+    inputs:
+      test_telegram:
+        description: Send a connection test instead of scanning
+        type: boolean
+        default: false
+  push:
+    paths: ['scanner.mjs', 'strategy.mjs', 'test.mjs', '.github/workflows/scan.yml']
+permissions:
+  contents: read
+concurrency:
+  group: crypto-monitor
+  cancel-in-progress: false
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node test.mjs
+      - name: Scan and notify
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TEST_TELEGRAM: ${{ inputs.test_telegram }}
+        run: |
+          if [ "$TEST_TELEGRAM" = "true" ]; then
+            node scanner.mjs --test-telegram
+          else
+            node scanner.mjs
+          fi
