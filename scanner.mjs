@@ -59,6 +59,12 @@ async function run(){
       candidates.push({symbol,...s,candles:bars.slice(-40)});
     }catch{failed++;}
   }));}
+  if(failed===symbols.length)throw new Error('All market data requests failed');
+  if(!state.aiVerified){
+    const check=await review({symbol:'TEST_ONLY',candles:[],note:'No price data. Reject this experimental setup.'});
+    if(check?.approve!==false)throw new Error('AI readiness check failed');
+    state.aiVerified=true;await save();console.log('Cloud AI review verified; empty setup rejected.');
+  }
   let sent=0;
   for(const s of candidates.sort((a,b)=>b.volumeRatio-a.volumeRatio).slice(0,5)){
     if(state.count>=MAX)break;
