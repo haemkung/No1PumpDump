@@ -9,7 +9,7 @@ on:
         type: boolean
         default: false
   push:
-    paths: ['scanner.mjs', 'strategy.mjs', 'test.mjs', '.github/workflows/scan.yml']
+    paths: ['scanner.mjs', 'strategy.mjs', 'test.mjs', 'scanner.test.mjs', '.github/workflows/scan.yml']
 permissions:
   contents: read
 concurrency:
@@ -37,4 +37,3 @@ jobs:
           else
             node scanner.mjs
           fi
-

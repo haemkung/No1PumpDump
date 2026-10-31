@@ -6,7 +6,11 @@ Repository Secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, GEMINI_API_KEY. Do not
 
 AI review cap: 50 attempts per Thai calendar day, including failures. Maximum 5 candidates per invocation, sorted by breakout volume ratio. No paid fallback and no exchange trade credentials. Actual Gemini free quota depends on account/provider limits.
 
-The private dashboard reads public workflow status only, not private alerts. Test with node test.mjs. Use workflow_dispatch with test_telegram to verify cloud Telegram delivery.
+The public dashboard reads public workflow status only, not private alerts. Test with node test.mjs. Use workflow_dispatch with test_telegram to verify cloud Telegram delivery.
 
 No auto-trading. Not backtested or proven profitable; model approval is qualitative. GitHub may disable schedules after inactivity, and provider access can change. Check Actions for failures. Local monitoring must remain available until cloud execution is verified.
-`nPrice source was changed to Kraken Futures because Binance returns HTTP 451 on GitHub runners. Universe and reference prices differ from Binance; each alert labels the source. Liquidity threshold remains USD 20 million per 24h. Do not treat Kraken entry/stop prices as exact Binance order prices.
+
+Price source was changed to Kraken Futures because Binance returns HTTP 451 on GitHub runners. Universe and reference prices differ from Binance; each alert labels the source. Liquidity threshold is USD 1 million per 24h. Do not treat Kraken entry/stop prices as exact Binance order prices.
+## Runtime status
+
+The 15-minute GitHub schedule is best effort and may skip or delay runs for hours. The private Telegram heartbeat, at most once every six hours after an invocation, reports actual coverage, stale setups, AI rejections/outages, and the gap since the previous invocation. It cannot report a stopped scheduler until another invocation occurs. A successful workflow means the job ran; it does not imply an entry was found. Liquidity filtering is now at USD 1M quote volume per day; spread, entry, stop, freshness, AI, and daily quota safeguards remain enforced.

@@ -46,16 +46,22 @@ async function review(candidate){
 async function run(){
   if(state.day!==day()){state.day=day();state.count=0;await save();}
   if(process.argv.includes('--test-telegram')){await telegram('ทดสอบ GitHub Cloud สำเร็จ ส่งจากเซิร์ฟเวอร์ออนไลน์ ไม่ใช่เครื่องคอม แหล่งราคา: Kraken Futures (ราคาและรายชื่ออาจต่างจาก Binance) ระบบตรวจเป็นรอบประมาณ 15 นาทีและอาจล่าช้า สัญญาณทดลอง ไม่รับประกันกำไร');console.log('Telegram cloud test delivered.');return;}
+  const previousRun=state.lastRun;
   const clock={serverTime:Date.now()}, snapshot=await tickers();
-  const symbols=snapshot.tickers.filter(t=>t.tag==='perpetual'&&/^PF_[A-Z0-9]+USD$/.test(t.symbol)&&!t.suspended&&Number(t.volumeQuote)>=20000000).map(t=>t.symbol);
+  const markets=snapshot.tickers.filter(t=>t.tag==='perpetual'&&/^PF_[A-Z0-9]+USD$/.test(t.symbol)&&!t.suspended);
+  const symbols=markets.filter(t=>Number(t.volumeQuote)>=1000000).map(t=>t.symbol);
   if(!symbols.length)throw new Error('No liquid markets');
   const candidates=[];let failed=0;
+  const stats={patterns:0,stale:0,duplicate:0,quoteRejected:0,aiReviewed:0,aiRejected:0,aiUnavailable:0};
   // Keep each invocation bounded; GitHub schedules may be late. Never alert on stale bars.
   for(let offset=0;offset<symbols.length;offset+=6){await Promise.all(symbols.slice(offset,offset+6).map(async symbol=>{
     try{
       const raw=await json(`https://futures.kraken.com/api/charts/v1/trade/${encodeURIComponent(symbol)}/15m`);
       const bars=raw.candles.map(b=>({time:Number(b.time),end:Number(b.time)+899999,high:Number(b.high),low:Number(b.low),close:Number(b.close),volume:Number(b.volume)})).filter(b=>b.end<clock.serverTime).sort((a,b)=>a.time-b.time).slice(-80);
-      const s=findSignal(bars);if(!s||clock.serverTime-s.end>freshMs||state.sent?.[`${symbol}-${s.side}-${s.time}`])return;
+      const s=findSignal(bars);if(!s)return;
+      stats.patterns++;
+      if(clock.serverTime-s.end>freshMs){stats.stale++;return;}
+      if(state.sent?.[`${symbol}-${s.side}-${s.time}`]){stats.duplicate++;return;}
       candidates.push({symbol,...s,candles:bars.slice(-40)});
     }catch{failed++;}
   }));}
@@ -72,20 +78,41 @@ async function run(){
       const book=await quote(s.symbol);
       const bid=Number(book.bidPrice),ask=Number(book.askPrice),entry=s.side==='LONG'?ask:bid;
       const risk=s.side==='LONG'?entry-s.stop:s.stop-entry;
-      if(!(bid>0&&ask>=bid)|| (ask-bid)/bid>.001||Math.abs(entry-s.entry)/s.entry>.003||risk/entry<.003||risk/entry>.03)continue;
+      if(!(bid>0&&ask>=bid)|| (ask-bid)/bid>.001||Math.abs(entry-s.entry)/s.entry>.003||risk/entry<.003||risk/entry>.03){stats.quoteRejected++;continue;}
       const target=s.side==='LONG'?entry+2*risk:entry-2*risk;
-      const result=await review({...s,entry,target});if(!result?.approve)continue;
+      stats.aiReviewed++;
+      let result;
+      try{result=await review({...s,entry,target});}catch{stats.aiUnavailable++;failed++;continue;}
+      if(!result){stats.aiUnavailable++;continue;}
+      if(!result.approve){stats.aiRejected++;continue;}
       const latest=await quote(s.symbol),now={serverTime:Date.now()};
       const fb=Number(latest.bidPrice),fa=Number(latest.askPrice),price=s.side==='LONG'?fa:fb;
-      if(now.serverTime-s.end>freshMs||!(fb>0&&fa>=fb)||(fa-fb)/fb>.001||Math.abs(price-entry)/entry>.001)continue;
+      if(now.serverTime-s.end>freshMs){stats.stale++;continue;}
+      if(!(fb>0&&fa>=fb)||(fa-fb)/fb>.001||Math.abs(price-entry)/entry>.001){stats.quoteRejected++;continue;}
       const id=`${s.symbol}-${s.side}-${s.time}`;
       // Record before delivery: at-most-once attempt avoids repeated stale entries after a network ambiguity.
       state.sent??={};state.sent[id]=new Date().toISOString();await save();
       await telegram(`สัญญาณทดลอง ${s.symbol} ${s.side}\nแหล่งข้อมูล: Kraken Futures (ราคาอาจต่างจาก Binance)\nกราฟ 15 นาที | ${new Date(s.end).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nราคาอ้างอิง Kraken ${entry}\nStop ${s.stop}\nเป้า 2R ${target}\nเหตุผล: ทะลุกรอบพร้อม Volume แล้วทดสอบกลับ\nGemini: ${result.reason}\nหมดอายุเมื่อปิดแท่งถัดไปหรือแตะ Stop ห้ามไล่ราคา ตรวจราคาในแอปก่อนเข้า\nระบบทดลอง ยังไม่พิสูจน์อัตราชนะ ไม่ได้ส่งคำสั่งซื้อขาย`);sent++;
     }catch{failed++;}
   }
-  state.lastRun=new Date().toISOString();state.scanned=symbols.length;state.failed=failed;state.error=null;state.provider='kraken-futures';await save();
+  state.lastRun=new Date().toISOString();state.scanned=symbols.length;state.failed=failed;state.error=failed||stats.aiUnavailable?'partial_failure':null;state.provider='kraken-futures';
+  state.lastResult={totalMarkets:markets.length,sent,...stats,aiBudgetUsed:state.count};await save();
+  const heartbeatDue=!state.lastHeartbeat||Date.now()-Date.parse(state.lastHeartbeat)>=6*3600000;
+  if(heartbeatDue){
+    const gap=previousRun?Math.round((Date.now()-Date.parse(previousRun))/60000):null;
+    const lines=[
+      'รายงานระบบ No1 (ไม่ใช่สัญญาณซื้อขาย)',
+      'ตรวจเวลา '+new Date().toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}),
+      `Kraken Futures ทั้งหมด ${markets.length} ตลาด | ผ่าน Volume ≥ $1M และตรวจ ${symbols.length} ตลาด`,
+      `พบรูปแบบ ${stats.patterns} | ข้ามเพราะเก่า ${stats.stale} | ผ่านให้ AI ตรวจ ${stats.aiReviewed} | ส่งสัญญาณ ${sent}`,
+      `AI ปฏิเสธ ${stats.aiRejected} | AI ไม่พร้อม ${stats.aiUnavailable} | ข้อมูล/ส่งข้อความล้มเหลว ${failed}`,
+      `ใช้ AI ${state.count}/50 ครั้งวันนี้`,
+      gap===null?'ยังไม่มีรอบก่อนหน้าให้เทียบ':`ห่างจากรอบก่อน ${gap} นาที${gap>35?' — ตาราง GitHub ล่าช้า ระบบไม่ได้ตรวจต่อเนื่องทุก 15 นาที':''}`,
+      'รายงานสถานะส่งไม่เกินทุก 6 ชั่วโมง สัญญาณจริงส่งทันทีเมื่อครบเงื่อนไขในรอบที่รัน'
+    ];
+    state.lastHeartbeat=new Date().toISOString();await save();await telegram(lines.join('\n'));
+  }
   if(!state.cloudStarted){await telegram('เปิดตัวเฝ้าตลาดบน GitHub สำเร็จแล้ว ปิดคอมได้ ตัวรันออนไลน์จะตรวจประมาณทุก 15 นาที (อาจล่าช้า) ใช้ข้อมูล Kraken Futures แทน Binance ที่บล็อกเซิร์ฟเวอร์ รายชื่อและราคาอาจต่างกัน ส่งเฉพาะสัญญาณที่ผ่านกฎและ Gemini เพดาน AI 50 ครั้ง/วัน ไม่รับประกันกำไร');state.cloudStarted=true;await save();}
-  console.log(JSON.stringify({provider:'kraken-futures',totalMarkets:snapshot.tickers.filter(t=>t.tag==='perpetual'&&/^PF_[A-Z0-9]+USD$/.test(t.symbol)&&!t.suspended).length,scanned:symbols.length,sent,failed,aiUsed:state.count,aiCap:MAX,complete:true}));
+  console.log(JSON.stringify({provider:'kraken-futures',totalMarkets:markets.length,scanned:symbols.length,sent,failed,...stats,aiUsed:state.count,aiCap:MAX,complete:true}));
 }
 try{await run();}catch(e){state.lastRun=new Date().toISOString();state.error='service_unavailable';try{await save()}catch{}const safe=/^Remote service HTTP \d+$/.test(e.message)?e.message:'service unavailable';console.error('Scan failed: '+safe+'. No credentials logged.');process.exitCode=1;}
