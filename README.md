@@ -1,5 +1,17 @@
 # No1 Crypto Watch Cloud
 
+## Broad historical learning
+
+A separate local historical learner collects rolling 30 days of closed 15-minute candles for every currently active Binance crypto USDT perpetual, caching bars and fetching only new bars on later runs. It derives rule candidates with next-open reference entry, the existing drift/stop limits and a four-hour barrier outcome. Ambiguous same-candle TP/SL outcomes are excluded rather than counted favorably. It uses a global chronological training/validation/test split (approximately 21/5/4 days), with a four-hour purge. The historical model remains separate from the actual-delivered-signal model; both make private pre-outcome shadow predictions in new signal journals. Historical candidates have no Gemini or historical bid/ask verification and the active-market universe has survivorship bias. These results cannot be presented as live alert accuracy, and neither model changes live selection.
+
+## Continuous local Machine Learning (shadow only)
+
+The Windows ML trainer runs every two hours and at sign-in, merging private confirmed Telegram journal entries with the initial historical audit. Only Binance signals whose four-hour observation window has matured are eligible. Target=1 means TP before SL within four hours; SL first or neither level touched within four hours is target=0, which does not mean every target=0 trade lost money. Ambiguous/missing outcomes are deferred, and aggregation trades resolve same-minute ordering. Training uses actual send time, never candle-close time as a substitute.
+
+A regularized logistic regression learns four entry-time features: log relative volume, directional close strength, log stop distance percent and Long/Short. Standardization for retrospective tests is fitted only on the earlier training partition. A separate all-matured-data model generates private prospective shadow predictions in each confirmed alert journal. Later trainer runs can link those pre-outcome predictions to matured outcomes. Model weights update only when the training data changes; a failed update retains the last model. Current samples are small and retrospective metrics are not proof of future skill.
+
+Models, training records and seed history stay in ignored `.ml/`; only code goes to GitHub. ML runs locally, calls no Gemini/OpenAI API, and does not consume the 50-call Gemini cap. It is always `shadow`, not calibrated, and cannot change live alert selection, stops or position sizes. The existing Telegram score remains the rule-based quality score. While the PC is off, GitHub backup continues its existing rules; local ML updates resume when Windows is signed in again.
+
 ## Learning audit and private journal
 
 Delivered signals now retain exact entry, stop, target, exchange, candle close, verification time, Telegram receipt time/message ID, score components, features and strategy version in the private pinned Telegram state. Pending/uncertain deliveries are distinct from confirmed sends. Nothing from this journal belongs in public GitHub files. A close-strength >=70% candidate filter is logged in shadow mode, without changing live selection or consuming AI calls. Retrospective comparisons on 49 alerts are exploratory, not independent validation; higher heuristic scores did not establish higher win rates. New messages distinguish candle-close time from verification time, and audits use the actual Telegram send time.

@@ -1,6 +1,8 @@
 import {findSignal} from './strategy.mjs';
 import {createMarketData} from './market-data.mjs';
 import {signalScore} from './signal-score.mjs';
+import {readFile} from 'node:fs/promises';
+import {featureVector,predict} from './ml-model.mjs';
 
 const token=process.env.TELEGRAM_BOT_TOKEN, chat=process.env.TELEGRAM_CHAT_ID, key=process.env.GEMINI_API_KEY;
 const model='gemini-3.5-flash-lite', MAX=50, freshMs=180000;
@@ -48,6 +50,10 @@ async function json(url,options={}){
 const provider=process.env.MONITOR_ORIGIN==='local'?'binance-futures':'kraken-futures';
 const market=createMarketData(provider,json);
 const quote=symbol=>market.quote(symbol);
+async function localShadowModel(file='model.json'){
+  if(provider!=='binance-futures')return null;
+  try{const m=JSON.parse(await readFile(new URL('./.ml/'+file,import.meta.url),'utf8'));const age=Date.now()-Date.parse(m.trainedAt);return m.mode==='shadow'&&m.affectsLiveSelection===false&&m.trainingCount>=20&&age>=0&&age<7*86400000?m:null;}catch{return null;}
+}
 async function telegram(text){const r=await json(`https://api.telegram.org/bot${token}/sendMessage`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:chat,text,disable_web_page_preview:true})});if(!r.ok)throw new Error('Telegram rejected message');return r.result;}
 async function review(candidate){
   if(state.day!==day()){state.day=day();state.count=0;}
@@ -68,6 +74,8 @@ async function run(){
   const previousRun=state.lastRun;
   const previousRunner=state.lastRunner;
   const previousProvider=state.provider;
+  const mlModel=await localShadowModel();
+  const mlHistoricalModel=await localShadowModel('historical-model.json');
   const scanStarted=Date.now(), universe=await market.universe();
   const clock={serverTime:universe.serverTime},symbols=universe.symbols;
   if(!symbols.length)throw new Error('No liquid markets');
@@ -120,6 +128,8 @@ async function run(){
       state.sent??={};state.sent[id]=new Date().toISOString();
       state.journal??={};
       const record={id,provider,symbol:s.symbol,side:s.side,entry,stop:s.stop,target,candleTime:s.time,candleClosedAt:new Date(s.end).toISOString(),verifiedAt:new Date().toISOString(),expiresAt:new Date(s.time+1800000).toISOString(),status:'delivery_pending',quality,features:{volumeRatio:s.volumeRatio,closeStrength:s.closeStrength,spreadRatio:(fa-fb)/fb,entryDrift:Math.abs(price-s.entry)/s.entry},strategyVersion:'breakout-retest-v1',shadow:{version:'close-strength-70-v1',pass:s.closeStrength>=.7,affectsLiveSelection:false}};
+      if(mlModel){try{const rawScore=predict(mlModel,featureVector(record));if(Number.isFinite(rawScore))record.mlExperimental={modelVersion:mlModel.version,trainedAt:mlModel.trainedAt,trainingCount:mlModel.trainingCount,rawScore,calibrated:false,mode:'shadow',affectsLiveSelection:false};}catch{}}
+      if(mlHistoricalModel){try{const rawScore=predict(mlHistoricalModel,featureVector(record));if(Number.isFinite(rawScore))record.mlHistoricalExperimental={modelVersion:mlHistoricalModel.version,trainedAt:mlHistoricalModel.trainedAt,trainingCount:mlHistoricalModel.trainingCount,rawScore,calibrated:false,mode:'shadow',affectsLiveSelection:false};}catch{}}
       state.journal[id]=record;await save();
       try{
         const receipt=await telegram(`สัญญาณทดลอง ${s.symbol} ${s.side}\nคะแนนความมั่นใจตามเกณฑ์ ${quality.total}/100\nคะแนนคุณภาพสัญญาณ ไม่ใช่เปอร์เซ็นต์โอกาสชนะ\nแหล่งข้อมูล: ${market.label}\nกราฟ 15 นาที | แท่งปิด ${new Date(s.end).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nตรวจยืนยัน ${new Date().toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nราคาอ้างอิง ${entry}\nStop ${s.stop}\nเป้า 2R ${target}\nเหตุผล: ทะลุกรอบพร้อม Volume แล้วทดสอบกลับ\nGemini: ${result.reason}\nหมดอายุเมื่อปิดแท่งถัดไปหรือแตะ Stop ห้ามไล่ราคา ตรวจราคาในแอปก่อนเข้า\nระบบทดลอง ยังไม่พิสูจน์อัตราชนะ ไม่ได้ส่งคำสั่งซื้อขาย`);

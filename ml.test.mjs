@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {fit,predict,featureVector,evaluate} from './ml-model.mjs';
+import {evaluateMaturedSignal} from './ml-outcomes.mjs';
+const samples=Array.from({length:60},(_,i)=>({x:[1,i/60,0,i%2],y:i>=30?1:0}));
+const model=fit(samples.slice(0,48));
+assert.ok(predict(model,[1,.9,0,0])>predict(model,[1,.1,0,0]));
+assert.equal(predict(model,[NaN,0,0,0]),null);
+assert.ok(model.scale.every(x=>Number.isFinite(x)&&x>0));
+const held=evaluate(model,samples.slice(48),.5);assert.equal(held.n,12);assert.equal(held.auc,null);
+assert.equal(featureVector({entry:1,stop:1,side:'LONG',features:{volumeRatio:2,closeStrength:.7}}),null);
+assert.equal(featureVector({entry:1,stop:.99,side:'LONG',features:{volumeRatio:2,closeStrength:.7}}).length,4);
+const now=Date.now(),start=now-5*3600000,r={symbol:'TESTUSDT',sentAt:new Date(start).toISOString(),entry:100,stop:99,target:102,side:'LONG'};
+assert.equal(await evaluateMaturedSignal({...r,sentAt:new Date(now).toISOString()},()=>{throw Error('Must not query immature labels');}),null);
+const minute=Math.floor(start/60000)*60000;
+const raw=[[minute,100,103,98,101,1,minute+59999],[start+4*3600000-1000,100,100,100,100,1,start+4*3600000+58999]];
+const outcome=await evaluateMaturedSignal(r,async url=>url.includes('klines')?raw:[{T:start+100,p:'98.9',a:1},{T:start+200,p:'102.1',a:2}]);
+assert.equal(outcome.kind,'SL','when both barriers occur, use chronological trades rather than favorable candle order');
+console.log('PASS: ML learns from labels, finite scaling, invalid inputs, immature exclusion, temporal barrier ordering');

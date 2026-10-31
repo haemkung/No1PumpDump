@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+await import('./ml.test.mjs');
 import {findSignal} from './strategy.mjs';
 import {signalScore} from './signal-score.mjs';
 const best={volumeRatio:3,spreadRatio:0,entryDrift:0,ageMs:0,approved:true};
