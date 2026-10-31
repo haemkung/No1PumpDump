@@ -30,6 +30,10 @@ try{
       else r.label=await evaluateMaturedSignal(r,json);
     }catch{failed++;}
   }
+  for(const r of Object.values(records)){
+    if(r.reaction5m||Date.now()<Date.parse(r.sentAt)+300000||!featureVector(r))continue;
+    try{const risk=Math.abs(r.entry-r.stop),reactionTarget=r.side==='LONG'?r.entry+.5*risk:r.entry-.5*risk;r.reaction5m={...await evaluateMaturedSignal({...r,target:reactionTarget,evaluationHorizonMs:300000},json),thresholdR:.5,windowMs:300000};}catch{failed++;}
+  }
   await save('records.json',records);
   const samples=Object.values(records).filter(r=>r.label&&Date.now()>=Date.parse(r.sentAt)+4*3600000).sort((a,b)=>Date.parse(a.sentAt)-Date.parse(b.sentAt)).map(r=>({id:r.id,time:r.sentAt,x:featureVector(r),y:r.label.target,ml:r.mlExperimental})).filter(s=>s.x);
   const fingerprint=createHash('sha256').update(JSON.stringify(samples.map(s=>[s.id,s.x,s.y]))).digest('hex');
@@ -42,5 +46,12 @@ try{
     const bundle={...model,version:'ml-shadow-'+now,trainedAt:now,trainedThrough:samples.at(-1).time,trainingCount:samples.length,positives:samples.filter(s=>s.y===1).length,fingerprint,mode:'shadow',affectsLiveSelection:false,calibrated:false,target:'TP before SL within four hours; no touch is target=0',retrospectiveTemporalTest:temporal,prospectiveObservations:samples.filter(s=>s.ml?.mode==='shadow'&&Date.parse(s.ml.trainedAt)<Date.parse(s.time)).length};
     await save('model.json',bundle);await save('runtime.json',{checkedAt:now,status:'trained',matured:samples.length,modelVersion:bundle.version,mode:'shadow',failed,retrospectiveTemporalTest:temporal});
     console.log(JSON.stringify({status:'trained',matured:samples.length,mode:'shadow',temporalTest:temporal,aiCalls:0}));
+  }
+  const reactions=Object.values(records).filter(r=>r.reaction5m&&Date.now()>=Date.parse(r.sentAt)+300000).sort((a,b)=>Date.parse(a.sentAt)-Date.parse(b.sentAt)).map(r=>({id:r.id,time:r.sentAt,x:featureVector(r),y:r.reaction5m.target})).filter(s=>s.x);
+  const reactionFingerprint=createHash('sha256').update(JSON.stringify(reactions.map(s=>[s.id,s.x,s.y]))).digest('hex'),oldReaction=await read('reaction-model.json',null);
+  if(reactions.length>=20&&new Set(reactions.map(s=>s.y)).size===2&&oldReaction?.fingerprint!==reactionFingerprint){
+    const split=Math.max(12,Math.floor(reactions.length*.75)),training=reactions.slice(0,split),prior=training.reduce((sum,s)=>sum+s.y,0)/training.length,now=new Date().toISOString();
+    const bundle={...fit(reactions),version:'reaction-shadow-'+now,trainedAt:now,trainingCount:reactions.length,fingerprint:reactionFingerprint,mode:'shadow',affectsLiveSelection:false,calibrated:false,target:'0.5R initial directional movement before Stop within five minutes; not a profitable trade claim',retrospectiveTemporalTest:evaluate(fit(training),reactions.slice(split),prior)};
+    await save('reaction-model.json',bundle);console.log(JSON.stringify({reactionModel:'trained',samples:reactions.length,mode:'shadow',aiCalls:0}));
   }
 }catch{await save('runtime.json',{checkedAt:new Date().toISOString(),status:'service_unavailable',mode:'shadow'});console.error('ML update deferred; existing model retained. No credentials logged.');process.exitCode=1;}

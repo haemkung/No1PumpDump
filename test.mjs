@@ -1,4 +1,16 @@
 import assert from 'node:assert/strict';
+import {rankTargets,confirmMinute,triggerStillValid} from './sniper.mjs';
+assert.equal(triggerStillValid({entry:100},'LONG',99.8,99.9),false);
+assert.equal(triggerStillValid({entry:100},'LONG',100,100.01),true);
+assert.equal(triggerStillValid({entry:100},'LONG',100.2,100.21),false);
+const boardFixture=Array.from({length:100},(_,i)=>({symbol:'C'+i,return30m:(i-50)/1000}));
+assert.deepEqual(rankTargets([{symbol:'C99',side:'LONG'},{symbol:'C60',side:'LONG'},{symbol:'C0',side:'SHORT'}],boardFixture).map(x=>x.symbol),['C99','C0']);
+const minuteFixture=Array.from({length:21},(_,i)=>({time:i*60000,end:i*60000+59999,open:100,high:100.4,low:99.8,close:100.2,volume:100}));
+minuteFixture.push({time:1260000,end:1319999,open:100.2,high:100.55,low:100.1,close:100.5,volume:160});
+assert.ok(confirmMinute(minuteFixture,'LONG',1320000));
+assert.equal(confirmMinute(minuteFixture,'SHORT',1320000),null);
+assert.equal(confirmMinute(minuteFixture,'LONG',1400000),null);
+minuteFixture.at(-1).volume=100;assert.equal(confirmMinute(minuteFixture,'LONG',1320000),null);
 await import('./ml.test.mjs');
 import {findSignal} from './strategy.mjs';
 import {signalScore} from './signal-score.mjs';

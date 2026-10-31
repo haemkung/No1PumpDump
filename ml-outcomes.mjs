@@ -1,5 +1,5 @@
 export async function evaluateMaturedSignal(r,json){
-  const start=Date.parse(r.sentAt),until=start+4*3600000;
+  const start=Date.parse(r.sentAt),horizon=r.evaluationHorizonMs??4*3600000,until=start+horizon;
   if(!Number.isFinite(start)||Date.now()<until)return null;
   const touch=p=>r.side==='LONG'?(p<=r.stop?'SL':p>=r.target?'TP':null):(p>=r.stop?'SL':p<=r.target?'TP':null);
   const raw=await json(`https://fapi.binance.com/fapi/v1/klines?symbol=${encodeURIComponent(r.symbol)}&interval=1m&startTime=${Math.floor(start/60000)*60000}&endTime=${until}&limit=1000`);
@@ -21,5 +21,5 @@ export async function evaluateMaturedSignal(r,json){
       if(!done)throw Error('Ambiguous outcome sequence');
     }else return {kind:sl?'SL':'TP',time,target:tp?1:0};
   }
-  return {kind:'no_touch_4h',time:until,target:0};
+  return {kind:horizon===4*3600000?'no_touch_4h':'no_touch_window',time:until,target:0};
 }
