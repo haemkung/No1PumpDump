@@ -1,5 +1,9 @@
 # No1 Crypto Watch Cloud
 
+## Signal quality score
+
+Each delivered signal includes a heuristic score out of 100 after all existing filters and Gemini approval. Rubric quality-v1: validated structure 30, relative breakout volume 25 (1.5x to 3x), spread 15 (0.1% to zero), entry drift 15 (0.3% to zero), freshness 15 (180 seconds to zero). Components are clamped and rounded. It is not a calibrated win probability, does not change the entry filters, and requires no additional AI calls. Scores from this rubric should not be compared with future rubric versions without adjustment.
+
 ## Automatic local recovery
 
 The separate Windows guardian checks every two minutes and at sign-in. It restarts a missing worker or one whose heartbeat is over seven minutes old, stops only the verified worker and its verified scanner child, and retries on later checks if restart fails. Recovery notices are queued during network failure and throttled to one per hour. The monitor task also has failure restarts. The guardian does not reset the shared daily AI quota or scan slot. Power, Windows sign-in, network connectivity, valid credentials and provider availability remain prerequisites; it cannot repair those externally controlled conditions.

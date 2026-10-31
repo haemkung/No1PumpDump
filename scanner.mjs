@@ -1,5 +1,6 @@
 import {findSignal} from './strategy.mjs';
 import {createMarketData} from './market-data.mjs';
+import {signalScore} from './signal-score.mjs';
 
 const token=process.env.TELEGRAM_BOT_TOKEN, chat=process.env.TELEGRAM_CHAT_ID, key=process.env.GEMINI_API_KEY;
 const model='gemini-3.5-flash-lite', MAX=50, freshMs=180000;
@@ -110,10 +111,12 @@ async function run(){
       const fb=Number(latest.bidPrice),fa=Number(latest.askPrice),price=s.side==='LONG'?fa:fb;
       if(now.serverTime-s.end>freshMs){stats.stale++;continue;}
       if(!(fb>0&&fa>=fb)||(fa-fb)/fb>.001||Math.abs(price-entry)/entry>.001){stats.quoteRejected++;continue;}
+      const quality=signalScore({volumeRatio:s.volumeRatio,spreadRatio:(fa-fb)/fb,entryDrift:Math.abs(price-s.entry)/s.entry,ageMs:Date.now()-s.end,approved:result.approve});
+      if(!quality)continue;
       const id=`${provider}-${s.symbol}-${s.side}-${s.time}`;
       // Record before delivery: at-most-once attempt avoids repeated stale entries after a network ambiguity.
       state.sent??={};state.sent[id]=new Date().toISOString();await save();
-      await telegram(`สัญญาณทดลอง ${s.symbol} ${s.side}\nแหล่งข้อมูล: ${market.label}\nกราฟ 15 นาที | ${new Date(s.end).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nราคาอ้างอิง ${entry}\nStop ${s.stop}\nเป้า 2R ${target}\nเหตุผล: ทะลุกรอบพร้อม Volume แล้วทดสอบกลับ\nGemini: ${result.reason}\nหมดอายุเมื่อปิดแท่งถัดไปหรือแตะ Stop ห้ามไล่ราคา ตรวจราคาในแอปก่อนเข้า\nระบบทดลอง ยังไม่พิสูจน์อัตราชนะ ไม่ได้ส่งคำสั่งซื้อขาย`);sent++;
+      await telegram(`สัญญาณทดลอง ${s.symbol} ${s.side}\nคะแนนความมั่นใจตามเกณฑ์ ${quality.total}/100\nคะแนนคุณภาพสัญญาณ ไม่ใช่เปอร์เซ็นต์โอกาสชนะ\nแหล่งข้อมูล: ${market.label}\nกราฟ 15 นาที | ${new Date(s.end).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nราคาอ้างอิง ${entry}\nStop ${s.stop}\nเป้า 2R ${target}\nเหตุผล: ทะลุกรอบพร้อม Volume แล้วทดสอบกลับ\nGemini: ${result.reason}\nหมดอายุเมื่อปิดแท่งถัดไปหรือแตะ Stop ห้ามไล่ราคา ตรวจราคาในแอปก่อนเข้า\nระบบทดลอง ยังไม่พิสูจน์อัตราชนะ ไม่ได้ส่งคำสั่งซื้อขาย`);sent++;
     }catch{failed++;}
   }
   state.lastRun=new Date().toISOString();state.scanned=scanned;state.failed=failed;state.error=failed||stats.aiUnavailable?'partial_failure':null;state.provider=provider;state.lastRunner=process.env.MONITOR_ORIGIN==='local'?'local':'github';

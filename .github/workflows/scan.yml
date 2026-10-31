@@ -9,7 +9,7 @@ on:
         type: boolean
         default: false
   push:
-    paths: ['scanner.mjs', 'market-data.mjs', 'strategy.mjs', 'test.mjs', 'scanner.test.mjs', '.github/workflows/scan.yml']
+    paths: ['scanner.mjs', 'market-data.mjs', 'signal-score.mjs', 'strategy.mjs', 'test.mjs', 'scanner.test.mjs', '.github/workflows/scan.yml']
 permissions:
   contents: read
 concurrency:

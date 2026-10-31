@@ -24,7 +24,7 @@ try{
       if(url.includes('/getFile?'))return reply({ok:true,result:{file_path:'private-test-state'}});
       if(url.includes('/file/bottest-token/'))return reply(state);
       if(url.endsWith('/editMessageMedia')){assert.equal(JSON.parse(options.body.get('media')).caption,claimedCaption,'state saves must retain the shared slot lock');saved=JSON.parse(await options.body.get('state').text());return reply({ok:true});}
-      if(url.endsWith('/sendMessage')){messages++;const text=JSON.parse(options.body).text;assert.ok(text.includes('\n'),'messages must contain real line breaks');assert.ok(!text.includes('\\n'),'do not send literal backslash-n');if(text.startsWith('สัญญาณทดลอง')){signals++;assert.equal(scenario,'approved');}else assert.match(text,/รายงานระบบ No1/);return reply({ok:true});}
+      if(url.endsWith('/sendMessage')){messages++;const text=JSON.parse(options.body).text;assert.ok(text.includes('\n'),'messages must contain real line breaks');assert.ok(!text.includes('\\n'),'do not send literal backslash-n');if(text.startsWith('สัญญาณทดลอง')){signals++;assert.equal(scenario,'approved');assert.match(text,/คะแนนความมั่นใจตามเกณฑ์ \d{1,3}\/100/);assert.ok(text.includes('ไม่ใช่เปอร์เซ็นต์โอกาสชนะ'));}else assert.match(text,/รายงานระบบ No1/);return reply({ok:true});}
       if(url.endsWith('/tickers')){marketReads++;return reply({tickers:[
         {symbol:'PF_TESTUSD',tag:'perpetual',volumeQuote:2000000,bid:100.48,ask:100.5},
         {symbol:'PF_OTHERUSD',tag:'perpetual',volumeQuote:25000000,bid:100.48,ask:100.5},

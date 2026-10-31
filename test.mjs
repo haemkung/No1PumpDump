@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
 import {findSignal} from './strategy.mjs';
+import {signalScore} from './signal-score.mjs';
+const best={volumeRatio:3,spreadRatio:0,entryDrift:0,ageMs:0,approved:true};
+assert.equal(signalScore(best).total,100);
+assert.equal(signalScore({...best,approved:false}),null);
+assert.equal(signalScore({...best,ageMs:180001}),null);
+assert.equal(signalScore({...best,volumeRatio:NaN}),null);
+for(const weaker of [{volumeRatio:1.5},{spreadRatio:.001},{entryDrift:.003},{ageMs:180000}])assert.ok(signalScore({...best,...weaker}).total<100);
+assert.equal(signalScore({...best,volumeRatio:100}).total,100);
 import {binanceSymbols,createMarketData} from './market-data.mjs';
 const valid={symbol:'SMALLUSDT',status:'TRADING',contractType:'PERPETUAL',quoteAsset:'USDT',underlyingType:'COIN'};
 assert.deepEqual(binanceSymbols({symbols:[valid,{...valid,symbol:'INDEXUSDT',underlyingType:'INDEX'},{...valid,symbol:'OLDUSDT',status:'SETTLING'},{...valid,symbol:'COINUSDC',quoteAsset:'USDC'},{...valid,symbol:'QUARTERLYUSDT',contractType:'CURRENT_QUARTER'}]}),['SMALLUSDT']);
