@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
 import {findSignal} from './strategy.mjs';
+import {binanceSymbols,createMarketData} from './market-data.mjs';
+const valid={symbol:'SMALLUSDT',status:'TRADING',contractType:'PERPETUAL',quoteAsset:'USDT',underlyingType:'COIN'};
+assert.deepEqual(binanceSymbols({symbols:[valid,{...valid,symbol:'INDEXUSDT',underlyingType:'INDEX'},{...valid,symbol:'OLDUSDT',status:'SETTLING'},{...valid,symbol:'COINUSDC',quoteAsset:'USDC'},{...valid,symbol:'QUARTERLYUSDT',contractType:'CURRENT_QUARTER'}]}),['SMALLUSDT']);
+assert.throws(()=>createMarketData('unknown',()=>{}));
 await import('./scanner.test.mjs');
 const bars=Array.from({length:20},(_,i)=>({time:i*900000,high:100,low:98,close:99,volume:100}));
 bars.push({time:18000000,high:102,low:99,close:101,volume:160},{time:18900000,high:101,low:99.8,close:100.5,volume:100});

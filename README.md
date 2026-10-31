@@ -4,7 +4,7 @@
 
 The separate Windows guardian checks every two minutes and at sign-in. It restarts a missing worker or one whose heartbeat is over seven minutes old, stops only the verified worker and its verified scanner child, and retries on later checks if restart fails. Recovery notices are queued during network failure and throttled to one per hour. The monitor task also has failure restarts. The guardian does not reset the shared daily AI quota or scan slot. Power, Windows sign-in, network connectivity, valid credentials and provider availability remain prerequisites; it cannot repair those externally controlled conditions.
 
-Experimental Kraken USD perpetual scanner with Gemini review and Telegram alerts. Standard GitHub Linux runner executes approximately every 15 minutes while the user's PC is off. GitHub schedules can be late or skipped; stale signals are rejected.
+Local primary scans every active Binance crypto USDT perpetual contract (COIN, TRADING, PERPETUAL, USDT), without a daily-volume universe threshold. Relative breakout volume, spread, entry drift, stop, freshness and Gemini filters apply after reading all markets. GitHub backup scans Kraken USD perpetuals with a USD 1M daily quote-volume threshold. Both share Telegram state, scan slots and the 50-call daily cap. Standard GitHub Linux runner executes approximately every 15 minutes while the user's PC is off. GitHub schedules can be late or skipped; stale signals are rejected.
 
 Repository Secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, GEMINI_API_KEY. Do not put values in source. Private state is a pinned no1-monitor-state.json document in the user's existing Telegram Bot chat; no state or alert history is published to GitHub. Do not delete/unpin the state document while monitoring. No unrelated existing pin is replaced during setup.
 
@@ -22,3 +22,7 @@ The 15-minute GitHub schedule is best effort and may skip or delay runs for hour
 ## Hybrid operation
 
 While the Windows computer is on and logged in, run-local.ps1 checks for each fresh 15-minute close. GitHub is a best-effort backup when the PC is off. Both use the same pinned private Telegram state, daily 50-call budget, and shared slot caption. An identical Telegram caption edit is rejected atomically, so only one runner claims a slot. All state saves retain the slot caption. New scans start only within the first three minutes of a 15-minute slot and requests have a four-minute overall deadline, avoiding overlap with the next slot. Deleting/unpinning/editing the state document may disrupt coordination. The public dashboard reports GitHub runs only; local activity remains private in Telegram.
+
+## Binance full-board validation
+
+Read-only live validation on 2026-10-31 read all 519/519 active crypto USDT perpetual contracts in 15.9 seconds, with zero market-data failures and ONUSDT included. It used no AI calls and sent no trading alerts. Counts change as Binance lists or delists contracts. Spot pairs, crypto indexes, premarket contracts, dated futures and non-USDT quote pairs are outside this universe. Failed reads are counted separately and are never presented as successfully scanned markets. There is no silent exchange fallback when Binance fails on the PC.

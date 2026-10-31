@@ -4,17 +4,22 @@ const testNow=Math.floor(originalNow()/900000)*900000+60000;
 Date.now=()=>testNow;
 try{
   process.env.TELEGRAM_BOT_TOKEN='test-token';process.env.TELEGRAM_CHAT_ID='test-chat';process.env.GEMINI_API_KEY='test-key';
-  for(const scenario of ['stale','rejected','unavailable','quiet','approved','held','late']){
+  for(const scenario of ['stale','rejected','unavailable','quiet','approved','held','late','binance']){
+    process.env.MONITOR_ORIGIN=scenario==='binance'?'local':'github';
     Date.now=()=>testNow+(scenario==='late'?600000:0);
     const now=Date.now(), end=now-(scenario==='stale'?240000:60000);
     const candles=Array.from({length:20},(_,i)=>({time:end-899999-(21-i)*900000,high:100,low:98,close:99,volume:100}));
     candles.push({time:end-899999-900000,high:102,low:99,close:101,volume:160},{time:end-899999,high:101,low:99.8,close:100.5,volume:100});
-    const state={day:new Date(now+7*3600000).toISOString().slice(0,10),count:49,sent:{},aiVerified:true,cloudStarted:true,lastRunner:'github',lastRun:new Date(now-4*3600000).toISOString(),...(scenario==='quiet'?{lastHeartbeat:new Date(now).toISOString()}:{} )};
+    const state={day:new Date(now+7*3600000).toISOString().slice(0,10),count:49,sent:{},aiVerified:true,cloudStarted:true,lastRunner:'github',provider:'kraken-futures',lastRun:new Date(now-4*3600000).toISOString(),...(scenario==='quiet'?{lastHeartbeat:new Date(now).toISOString()}:{} )};
     let saved, aiCalls=0, messages=0, signals=0,marketReads=0,claimedCaption;
     const reply=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'content-type':'application/json'}});
     globalThis.fetch=async (url,options={})=>{
       url=String(url);
       if(url.endsWith('/getChat'))return reply({ok:true,result:{pinned_message:{message_id:1,document:{file_name:'no1-monitor-state.json',file_id:'test-file'}}}});
+      if(url.endsWith('/exchangeInfo'))return reply({symbols:['TESTUSDT','OTHERUSDT','THINUSDT'].map(symbol=>({symbol,status:'TRADING',contractType:'PERPETUAL',quoteAsset:'USDT',underlyingType:'COIN'}))});
+      if(url.endsWith('/fapi/v1/time'))return reply({serverTime:Date.now()});
+      if(url.includes('/fapi/v1/klines?'))return reply(candles.map(b=>[b.time,99,b.high,b.low,b.close,b.volume,b.time+899999]));
+      if(url.includes('/fapi/v1/ticker/bookTicker?'))return reply({bidPrice:100.48,askPrice:100.5});
       if(url.endsWith('/editMessageCaption')){claimedCaption=JSON.parse(options.body).caption;return scenario==='held'?reply({ok:false,description:'Bad Request: message is not modified'},400):reply({ok:true});}
       if(url.includes('/getFile?'))return reply({ok:true,result:{file_path:'private-test-state'}});
       if(url.includes('/file/bottest-token/'))return reply(state);
@@ -30,7 +35,8 @@ try{
     };
     await import('./scanner.mjs?test='+scenario);
     if(scenario==='held'||scenario==='late'){assert.equal(saved,undefined,'losing or late runner must not overwrite shared quota');assert.equal(aiCalls,0);assert.equal(messages,0);assert.equal(marketReads,0);continue;}
-    assert.equal(saved.scanned,2,'include $2M market and exclude $0.5M market');
+    assert.equal(saved.scanned,scenario==='binance'?3:2,'Binance includes thin markets; Kraken backup retains its threshold');
+    if(scenario==='binance'){assert.equal(saved.provider,'binance-futures');assert.equal(saved.lastRunner,'local');assert.equal(saved.lastResult.attempted,3);}
     assert.equal(saved.lastResult.sent,scenario==='approved'?1:0,'only approved fresh setup may become a signal');
     assert.equal(signals,scenario==='approved'?1:0);
     assert.equal(saved.count,scenario==='stale'?49:50,'persist quota before request and never exceed 50');
@@ -43,6 +49,6 @@ try{
 }finally{
   globalThis.fetch=originalFetch;
   Date.now=originalNow;
-  for(const key of ['TELEGRAM_BOT_TOKEN','TELEGRAM_CHAT_ID','GEMINI_API_KEY']){if(originalEnv[key]===undefined)delete process.env[key];else process.env[key]=originalEnv[key];}
+  for(const key of ['TELEGRAM_BOT_TOKEN','TELEGRAM_CHAT_ID','GEMINI_API_KEY','MONITOR_ORIGIN']){if(originalEnv[key]===undefined)delete process.env[key];else process.env[key]=originalEnv[key];}
 }
 console.log('PASS: wider coverage, stale rejection, AI rejection/outage, daily cap, heartbeat throttling');
