@@ -6,3 +6,6 @@ state.json
 quota.json
 runtime.json
 state.enc
+local-runtime.json
+watchdog-runtime.json
+*.tmp

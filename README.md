@@ -1,5 +1,9 @@
 # No1 Crypto Watch Cloud
 
+## Automatic local recovery
+
+The separate Windows guardian checks every two minutes and at sign-in. It restarts a missing worker or one whose heartbeat is over seven minutes old, stops only the verified worker and its verified scanner child, and retries on later checks if restart fails. Recovery notices are queued during network failure and throttled to one per hour. The monitor task also has failure restarts. The guardian does not reset the shared daily AI quota or scan slot. Power, Windows sign-in, network connectivity, valid credentials and provider availability remain prerequisites; it cannot repair those externally controlled conditions.
+
 Experimental Kraken USD perpetual scanner with Gemini review and Telegram alerts. Standard GitHub Linux runner executes approximately every 15 minutes while the user's PC is off. GitHub schedules can be late or skipped; stale signals are rejected.
 
 Repository Secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, GEMINI_API_KEY. Do not put values in source. Private state is a pinned no1-monitor-state.json document in the user's existing Telegram Bot chat; no state or alert history is published to GitHub. Do not delete/unpin the state document while monitoring. No unrelated existing pin is replaced during setup.
