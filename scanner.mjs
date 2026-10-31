@@ -105,7 +105,8 @@ async function run(){
       const target=s.side==='LONG'?entry+2*risk:entry-2*risk;
       stats.aiReviewed++;
       let result;
-      try{result=await review({...s,entry,target});}catch{stats.aiUnavailable++;failed++;continue;}
+      const {closeStrength,...reviewSignal}=s;
+      try{result=await review({...reviewSignal,entry,target});}catch{stats.aiUnavailable++;failed++;continue;}
       if(!result){stats.aiUnavailable++;continue;}
       if(!result.approve){stats.aiRejected++;continue;}
       const latest=await quote(s.symbol),now={serverTime:Date.now()};
