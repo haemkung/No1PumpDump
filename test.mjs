@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+await import('./early-base.test.mjs');
+await import('./early-watch.test.mjs');
 import {rankTargets,confirmMinute,triggerStillValid} from './sniper.mjs';
 assert.equal(triggerStillValid({entry:100},'LONG',99.8,99.9),false);
 assert.equal(triggerStillValid({entry:100},'LONG',100,100.01),true);

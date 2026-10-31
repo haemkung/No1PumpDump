@@ -35,6 +35,23 @@ try{
     try{const risk=Math.abs(r.entry-r.stop),reactionTarget=r.side==='LONG'?r.entry+.5*risk:r.entry-.5*risk;r.reaction5m={...await evaluateMaturedSignal({...r,target:reactionTarget,evaluationHorizonMs:300000},json),thresholdR:.5,windowMs:300000};}catch{failed++;}
   }
   await save('records.json',records);
+  // Early watches have a different target and must never enter the entry-signal cohort.
+  try{
+    const earlyState=JSON.parse(await readFile(new URL('./.early/state.json',import.meta.url),'utf8'));
+    const early=await read('early-records.json',{});
+    for(const r of Object.values(earlyState.journal||{}))if(r.status==='watch_sent'&&r.sentAt&&featureVector(r))early[r.id]={...early[r.id],...r};
+    for(const r of Object.values(early))if(!r.reaction5m&&Date.now()>=Date.parse(r.sentAt)+300000){
+      try{const risk=Math.abs(r.entry-r.stop);r.reaction5m=await evaluateMaturedSignal({...r,target:r.entry+(r.side==='LONG'?1:-1)*.5*risk,evaluationHorizonMs:300000},json);}catch{failed++;}
+    }
+    await save('early-records.json',early);
+    const samples=Object.values(early).filter(r=>r.reaction5m).sort((a,b)=>Date.parse(a.sentAt)-Date.parse(b.sentAt)).map(r=>({id:r.id,time:r.sentAt,x:featureVector(r),y:r.reaction5m.target}));
+    const fingerprint=createHash('sha256').update(JSON.stringify(samples)).digest('hex'),previous=await read('early-model.json',null);
+    if(samples.length>=20&&new Set(samples.map(s=>s.y)).size===2&&previous?.fingerprint!==fingerprint){
+      const split=Math.max(12,Math.floor(samples.length*.75)),training=samples.slice(0,split),prior=training.reduce((sum,s)=>sum+s.y,0)/training.length;
+      await save('early-model.json',{...fit(samples),trainedAt:new Date().toISOString(),trainingCount:samples.length,fingerprint,mode:'shadow',affectsLiveSelection:false,calibrated:false,target:'Early watch only: 0.5R directional response before invalidation within five minutes; not trade profitability',retrospectiveTemporalTest:evaluate(fit(training),samples.slice(split),prior)});
+    }
+    await save('early-runtime.json',{checkedAt:new Date().toISOString(),matured:samples.length,required:20,mode:'shadow',affectsLiveSelection:false});
+  }catch{/* Missing or temporarily busy early-watch data must not interrupt existing models. */}
   const samples=Object.values(records).filter(r=>r.label&&Date.now()>=Date.parse(r.sentAt)+4*3600000).sort((a,b)=>Date.parse(a.sentAt)-Date.parse(b.sentAt)).map(r=>({id:r.id,time:r.sentAt,x:featureVector(r),y:r.label.target,ml:r.mlExperimental})).filter(s=>s.x);
   const fingerprint=createHash('sha256').update(JSON.stringify(samples.map(s=>[s.id,s.x,s.y]))).digest('hex');
   const previous=await read('model.json',null);

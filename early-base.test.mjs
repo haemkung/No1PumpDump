@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {earlyBase,earlyScore} from './early-base.mjs';
+const base=Array.from({length:20},(_,i)=>({time:i*60000,end:i*60000+59999,open:100.2,high:100.5,low:100,close:100.1,volume:100}));
+const long=[...base,{time:1200000,end:1259999,open:100.1,high:100.1,low:99.8,close:99.95,volume:250},{time:1260000,end:1319999,open:99.95,high:100.3,low:99.95,close:100.3,volume:120}];
+assert.equal(earlyBase(long,1320000)?.side,'LONG');
+assert.equal(earlyBase(long.slice(0,-1),1260000),null,'A falling sweep alone is not a reclaim');
+assert.equal(earlyBase(long,1500000),null,'Expired reclaim rejected');
+const weak=structuredClone(long);weak.at(-2).volume=199;assert.equal(earlyBase(weak,1320000),null);
+const gap=structuredClone(long);gap.at(-1).time+=60000;assert.equal(earlyBase(gap,1320000),null);
+const invalid=structuredClone(long);invalid.at(-2).volume=NaN;assert.equal(earlyBase(invalid,1320000),null);
+const future=structuredClone(long);assert.equal(earlyBase(future,1300000),null,'Unclosed candle rejected');
+const short=long.map(b=>({...b,open:200-b.open,high:200-b.low,low:200-b.high,close:200-b.close}));
+assert.equal(earlyBase(short,1320000)?.side,'SHORT');
+assert.ok(earlyScore(earlyBase(long,1320000))<=100);
+console.log('Early-base causal detector checks passed');
