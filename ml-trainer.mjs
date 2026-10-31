@@ -2,6 +2,7 @@ import {readFile,writeFile,mkdir,rename} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {featureVector,fit,evaluate} from './ml-model.mjs';
 import {evaluateMaturedSignal} from './ml-outcomes.mjs';
+import {prospectiveEarlyMetrics} from './early-learning.mjs';
 const dir=new URL('./.ml/',import.meta.url);await mkdir(dir,{recursive:true});
 async function read(name,fallback){try{return JSON.parse(await readFile(new URL(name,dir),'utf8'));}catch{return fallback;}}
 async function save(name,data){const url=new URL(name,dir),tmp=new URL(name+'.tmp',dir);await writeFile(tmp,JSON.stringify(data,null,2));await rename(tmp,url);}
@@ -50,7 +51,7 @@ try{
       const split=Math.max(12,Math.floor(samples.length*.75)),training=samples.slice(0,split),prior=training.reduce((sum,s)=>sum+s.y,0)/training.length;
       await save('early-model.json',{...fit(samples),trainedAt:new Date().toISOString(),trainingCount:samples.length,fingerprint,mode:'shadow',affectsLiveSelection:false,calibrated:false,target:'Early watch only: 0.5R directional response before invalidation within five minutes; not trade profitability',retrospectiveTemporalTest:evaluate(fit(training),samples.slice(split),prior)});
     }
-    await save('early-runtime.json',{checkedAt:new Date().toISOString(),matured:samples.length,required:20,mode:'shadow',affectsLiveSelection:false});
+    await save('early-runtime.json',{checkedAt:new Date().toISOString(),matured:samples.length,required:20,mode:'shadow',affectsLiveSelection:false,prospective:prospectiveEarlyMetrics(Object.values(early))});
   }catch{/* Missing or temporarily busy early-watch data must not interrupt existing models. */}
   const samples=Object.values(records).filter(r=>r.label&&Date.now()>=Date.parse(r.sentAt)+4*3600000).sort((a,b)=>Date.parse(a.sentAt)-Date.parse(b.sentAt)).map(r=>({id:r.id,time:r.sentAt,x:featureVector(r),y:r.label.target,ml:r.mlExperimental})).filter(s=>s.x);
   const fingerprint=createHash('sha256').update(JSON.stringify(samples.map(s=>[s.id,s.x,s.y]))).digest('hex');

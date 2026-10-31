@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {earlyBase,earlyScore} from './early-base.mjs';
+import {earlyForecast,prospectiveEarlyMetrics} from './early-learning.mjs';
 const base=Array.from({length:20},(_,i)=>({time:i*60000,end:i*60000+59999,open:100.2,high:100.5,low:100,close:100.1,volume:100}));
 const long=[...base,{time:1200000,end:1259999,open:100.1,high:100.1,low:99.8,close:99.95,volume:250},{time:1260000,end:1319999,open:99.95,high:100.3,low:99.95,close:100.3,volume:120}];
 assert.equal(earlyBase(long,1320000)?.side,'LONG');
@@ -12,4 +13,12 @@ const future=structuredClone(long);assert.equal(earlyBase(future,1300000),null,'
 const short=long.map(b=>({...b,open:200-b.open,high:200-b.low,low:200-b.high,close:200-b.close}));
 assert.equal(earlyBase(short,1320000)?.side,'SHORT');
 assert.ok(earlyScore(earlyBase(long,1320000))<=100);
+const model={mode:'shadow',trainedAt:new Date(1000).toISOString(),fingerprint:'fixture',featureNames:['logVolumeRatio','closeStrength','logStopPercent','isLong'],mean:[0,0,0,0],scale:[1,1,1,1],weights:[0,0,0,0],bias:0};
+const record={...earlyBase(long,1320000),features:{volumeRatio:2.5,closeStrength:1}};
+assert.equal(earlyForecast(model,record,999),null,'Future-trained model forbidden');
+const forecast=earlyForecast(model,record,2000);assert.equal(forecast.uncalibratedEstimate,.5);
+const prospect={mlExperimental:forecast,deliveryAttemptAt:new Date(2500).toISOString(),sentAt:new Date(3000).toISOString(),reaction5m:{target:1}};
+assert.equal(prospectiveEarlyMetrics([prospect]).brier,.25);
+assert.equal(prospectiveEarlyMetrics([{...prospect,deliveryAttemptAt:new Date(1500).toISOString()}]).n,0,'Post-attempt predictions excluded');
+assert.equal(prospectiveEarlyMetrics([{...prospect,sentAt:new Date(2000).toISOString()}]).n,1,'Telegram second-resolution timestamp handled');
 console.log('Early-base causal detector checks passed');

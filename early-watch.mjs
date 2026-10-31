@@ -1,6 +1,7 @@
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {createMarketData} from './market-data.mjs';
 import {earlyBase,earlyScore} from './early-base.mjs';
+import {earlyForecast} from './early-learning.mjs';
 import {pathToFileURL} from 'node:url';
 import {resolve,sep} from 'node:path';
 const token=process.env.TELEGRAM_BOT_TOKEN,chat=process.env.TELEGRAM_CHAT_ID,key=process.env.GEMINI_API_KEY;
@@ -9,6 +10,7 @@ const dir=process.env.EARLY_WATCH_STATE_DIR?pathToFileURL(resolve(process.env.EA
 let state;for(const name of ['state.json','state.backup.json']){try{const candidate=JSON.parse(await readFile(new URL(name,dir),'utf8'));if(candidate.sent&&candidate.journal){state=candidate;break;}}catch{}}
 state??={sent:{},journal:{},aiCount:0};let lastSaved=JSON.stringify(state);
 const started=Date.now(),deadline=started+90000;
+let learningModel=null;try{learningModel=JSON.parse(await readFile(new URL('./.ml/early-model.json',import.meta.url),'utf8'));}catch{}
 async function save(){const serialized=JSON.stringify(state);await writeFile(new URL('state.backup.json',dir),lastSaved);await writeFile(new URL('state.json',dir),serialized);lastSaved=serialized;}
 async function json(url,options={}){if(Date.now()>=deadline)throw Error('Watch deadline');const r=await fetch(url,{...options,signal:AbortSignal.timeout(Math.max(1,Math.min(20000,deadline-Date.now())))});if(!r.ok)throw Error('Service HTTP '+r.status);return r.json();}
 try{
@@ -31,6 +33,8 @@ try{
     const fresh=await market.quote(s.symbol),fb=Number(fresh.bidPrice),fa=Number(fresh.askPrice),price=s.side==='LONG'?fa:fb;
     if(Date.now()-s.end>90000||!(fb>0&&fa>=fb)||(fa-fb)/fb>.001||Math.abs(price/s.entry-1)>.0015||(s.side==='LONG'?price<=s.stop:price>=s.stop))continue;
     const record={id,symbol:s.symbol,side:s.side,entry:price,stop:s.stop,features:{volumeRatio:s.volumeRatio,closeStrength:s.closeStrength},candleTime:s.time,score:earlyScore(s),status:'delivery_pending',profile:'early-watch-v1'};
+    record.mlExperimental=earlyForecast(learningModel,record,Date.now());
+    record.deliveryAttemptAt=new Date().toISOString();
     state.journal[id]=record;state.sent[s.symbol+'-'+s.side]=new Date().toISOString();await save();
     const text=`เฝ้าต้นฐาน ${s.symbol} ${s.side}\nระยะเริ่มต้น — ยังไม่ใช่สัญญาณ Sniper ยืนยัน\nคะแนนรูปแบบต้นฐาน ${record.score}/100 ไม่ใช่โอกาสชนะ\nBinance USDT Futures | แท่ง 1 นาทีปิด ${new Date(s.end).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nราคาอ้างอิงขณะตรวจ ${price}\nกรอบฐานเดิม ${s.baseLow} – ${s.baseHigh}\nระดับเสียรูปแบบ ${s.stop}\nเหตุผล: กวาดขอบฐานแล้วดึงกลับ พร้อม Volume ${s.volumeRatio.toFixed(2)} เท่า\nGemini: ${review.reason}\nเป็นจุดเริ่มจับตา ไม่ใช่การรับรองจุดต่ำสุด/สูงสุด อาจกลับผิดทางได้ ไม่ส่งคำสั่งซื้อขาย`;
     try{const result=await json('https://api.telegram.org/bot'+token+'/sendMessage',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:chat,text})});if(!result.ok)throw Error('Delivery uncertain');record.status='watch_sent';record.sentAt=new Date(result.result.date*1000).toISOString();record.messageId=result.result.message_id;sent++;}catch{record.status='delivery_unknown';}await save();
