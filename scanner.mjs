@@ -12,19 +12,34 @@ async function load(){
   if(typeof s.count!=='number'||!s.day||typeof s.sent!=='object')throw new Error('Invalid private state.');
   return {...s,messageId:m.message_id};
 }
+let slotCaption=null, ownsSlot=false, deadline=Infinity;
 const state=await load();
+async function claimSlot(){
+  const now=Date.now();
+  if(now%900000>=freshMs)return false;
+  const caption='No1 scan-slot '+Math.floor(now/900000);
+  // Telegram atomically rejects a second identical caption edit. Both runners
+  // use the same slot value; every state save preserves it until the next slot.
+  const r=await fetch(`https://api.telegram.org/bot${token}/editMessageCaption`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:chat,message_id:state.messageId,caption}),signal:AbortSignal.timeout(25000)});
+  const response=await r.json();
+  if(r.status===400&&/message is not modified/i.test(response.description||''))return false;
+  if(!r.ok||!response.ok)throw new Error('Slot claim failed');
+  slotCaption=caption;ownsSlot=true;deadline=Date.now()+240000;return true;
+}
 async function save(){
   const form=new FormData();
   form.set('chat_id',chat);form.set('message_id',String(state.messageId));
   const {messageId,...data}=state;
   form.set('state',new Blob([JSON.stringify(data)],{type:'application/json'}),'no1-monitor-state.json');
-  form.set('media',JSON.stringify({type:'document',media:'attach://state',caption:'สถานะระบบ No1 · ใช้ AI '+state.count+'/50 ครั้ง วันที่ '+state.day+' (อัปเดตอัตโนมัติ)'}));
+  if(!ownsSlot)throw new Error('State write requires slot ownership');
+  form.set('media',JSON.stringify({type:'document',media:'attach://state',caption:slotCaption}));
   const r=await json(`https://api.telegram.org/bot${token}/editMessageMedia`,{method:'POST',body:form});
   if(!r.ok)throw new Error('Private state update failed');
 }
 function day(){return new Date(Date.now()+7*3600000).toISOString().slice(0,10);}
 async function json(url,options={}){
-  const r=await fetch(url,{...options,signal:AbortSignal.timeout(25000)});
+  if(Date.now()>=deadline)throw new Error('Scan deadline exceeded');
+  const r=await fetch(url,{...options,signal:AbortSignal.timeout(Math.max(1,Math.min(25000,deadline-Date.now())))});
   if(!r.ok) throw new Error(`Remote service HTTP ${r.status}`);
   return r.json();
 }
@@ -44,8 +59,9 @@ async function review(candidate){
   return typeof out.approve==='boolean'&&typeof out.reason==='string'&&out.reason.length<=1000?out:null;
 }
 async function run(){
-  if(state.day!==day()){state.day=day();state.count=0;await save();}
   if(process.argv.includes('--test-telegram')){await telegram('ทดสอบ GitHub Cloud สำเร็จ ส่งจากเซิร์ฟเวอร์ออนไลน์ ไม่ใช่เครื่องคอม แหล่งราคา: Kraken Futures (ราคาและรายชื่ออาจต่างจาก Binance) ระบบตรวจเป็นรอบประมาณ 15 นาทีและอาจล่าช้า สัญญาณทดลอง ไม่รับประกันกำไร');console.log('Telegram cloud test delivered.');return;}
+  if(!await claimSlot()){console.log(JSON.stringify({skipped:true,reason:'outside_fresh_window_or_slot_already_claimed'}));return;}
+  if(state.day!==day()){state.day=day();state.count=0;await save();}
   const previousRun=state.lastRun;
   const clock={serverTime:Date.now()}, snapshot=await tickers();
   const markets=snapshot.tickers.filter(t=>t.tag==='perpetual'&&/^PF_[A-Z0-9]+USD$/.test(t.symbol)&&!t.suspended);
@@ -95,7 +111,7 @@ async function run(){
       await telegram(`สัญญาณทดลอง ${s.symbol} ${s.side}\nแหล่งข้อมูล: Kraken Futures (ราคาอาจต่างจาก Binance)\nกราฟ 15 นาที | ${new Date(s.end).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nราคาอ้างอิง Kraken ${entry}\nStop ${s.stop}\nเป้า 2R ${target}\nเหตุผล: ทะลุกรอบพร้อม Volume แล้วทดสอบกลับ\nGemini: ${result.reason}\nหมดอายุเมื่อปิดแท่งถัดไปหรือแตะ Stop ห้ามไล่ราคา ตรวจราคาในแอปก่อนเข้า\nระบบทดลอง ยังไม่พิสูจน์อัตราชนะ ไม่ได้ส่งคำสั่งซื้อขาย`);sent++;
     }catch{failed++;}
   }
-  state.lastRun=new Date().toISOString();state.scanned=symbols.length;state.failed=failed;state.error=failed||stats.aiUnavailable?'partial_failure':null;state.provider='kraken-futures';
+  state.lastRun=new Date().toISOString();state.scanned=symbols.length;state.failed=failed;state.error=failed||stats.aiUnavailable?'partial_failure':null;state.provider='kraken-futures';state.lastRunner=process.env.MONITOR_ORIGIN==='local'?'local':'github';
   state.lastResult={totalMarkets:markets.length,sent,...stats,aiBudgetUsed:state.count};await save();
   const heartbeatDue=!state.lastHeartbeat||Date.now()-Date.parse(state.lastHeartbeat)>=6*3600000;
   if(heartbeatDue){
@@ -103,6 +119,7 @@ async function run(){
     const lines=[
       'รายงานระบบ No1 (ไม่ใช่สัญญาณซื้อขาย)',
       'ตรวจเวลา '+new Date().toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}),
+      'ตัวตรวจ: '+(state.lastRunner==='local'?'เครื่องคอมของคุณ':'GitHub สำรอง'),
       `Kraken Futures ทั้งหมด ${markets.length} ตลาด | ผ่าน Volume ≥ $1M และตรวจ ${symbols.length} ตลาด`,
       `พบรูปแบบ ${stats.patterns} | ข้ามเพราะเก่า ${stats.stale} | ผ่านให้ AI ตรวจ ${stats.aiReviewed} | ส่งสัญญาณ ${sent}`,
       `AI ปฏิเสธ ${stats.aiRejected} | AI ไม่พร้อม ${stats.aiUnavailable} | ข้อมูล/ส่งข้อความล้มเหลว ${failed}`,
@@ -115,4 +132,4 @@ async function run(){
   if(!state.cloudStarted){await telegram('เปิดตัวเฝ้าตลาดบน GitHub สำเร็จแล้ว ปิดคอมได้ ตัวรันออนไลน์จะตรวจประมาณทุก 15 นาที (อาจล่าช้า) ใช้ข้อมูล Kraken Futures แทน Binance ที่บล็อกเซิร์ฟเวอร์ รายชื่อและราคาอาจต่างกัน ส่งเฉพาะสัญญาณที่ผ่านกฎและ Gemini เพดาน AI 50 ครั้ง/วัน ไม่รับประกันกำไร');state.cloudStarted=true;await save();}
   console.log(JSON.stringify({provider:'kraken-futures',totalMarkets:markets.length,scanned:symbols.length,sent,failed,...stats,aiUsed:state.count,aiCap:MAX,complete:true}));
 }
-try{await run();}catch(e){state.lastRun=new Date().toISOString();state.error='service_unavailable';try{await save()}catch{}const safe=/^Remote service HTTP \d+$/.test(e.message)?e.message:'service unavailable';console.error('Scan failed: '+safe+'. No credentials logged.');process.exitCode=1;}
+try{await run();}catch(e){if(ownsSlot){state.lastRun=new Date().toISOString();state.error='service_unavailable';try{await save()}catch{}}const safe=/^Remote service HTTP \d+$/.test(e.message)?e.message:'service unavailable';console.error('Scan failed: '+safe+'. No credentials logged.');process.exitCode=1;}

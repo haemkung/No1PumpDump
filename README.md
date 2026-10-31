@@ -14,3 +14,7 @@ Price source was changed to Kraken Futures because Binance returns HTTP 451 on G
 ## Runtime status
 
 The 15-minute GitHub schedule is best effort and may skip or delay runs for hours. The private Telegram heartbeat, at most once every six hours after an invocation, reports actual coverage, stale setups, AI rejections/outages, and the gap since the previous invocation. It cannot report a stopped scheduler until another invocation occurs. A successful workflow means the job ran; it does not imply an entry was found. Liquidity filtering is now at USD 1M quote volume per day; spread, entry, stop, freshness, AI, and daily quota safeguards remain enforced.
+
+## Hybrid operation
+
+While the Windows computer is on and logged in, run-local.ps1 checks for each fresh 15-minute close. GitHub is a best-effort backup when the PC is off. Both use the same pinned private Telegram state, daily 50-call budget, and shared slot caption. An identical Telegram caption edit is rejected atomically, so only one runner claims a slot. All state saves retain the slot caption. New scans start only within the first three minutes of a 15-minute slot and requests have a four-minute overall deadline, avoiding overlap with the next slot. Deleting/unpinning/editing the state document may disrupt coordination. The public dashboard reports GitHub runs only; local activity remains private in Telegram.
