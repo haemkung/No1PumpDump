@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {earlyBase,earlyScore} from './early-base.mjs';
 import {earlyForecast,prospectiveEarlyMetrics} from './early-learning.mjs';
+import {shortlistConfirmed,notificationPolicy} from './notification-policy.mjs';
 const base=Array.from({length:20},(_,i)=>({time:i*60000,end:i*60000+59999,open:100.2,high:100.5,low:100,close:100.1,volume:100}));
 const long=[...base,{time:1200000,end:1259999,open:100.1,high:100.1,low:99.8,close:99.95,volume:250},{time:1260000,end:1319999,open:99.95,high:100.3,low:99.95,close:100.3,volume:120}];
 assert.equal(earlyBase(long,1320000)?.side,'LONG');
@@ -21,4 +22,8 @@ const prospect={mlExperimental:forecast,deliveryAttemptAt:new Date(2500).toISOSt
 assert.equal(prospectiveEarlyMetrics([prospect]).brier,.25);
 assert.equal(prospectiveEarlyMetrics([{...prospect,deliveryAttemptAt:new Date(1500).toISOString()}]).n,0,'Post-attempt predictions excluded');
 assert.equal(prospectiveEarlyMetrics([{...prospect,sentAt:new Date(2000).toISOString()}]).n,1,'Telegram second-resolution timestamp handled');
+const ranked=shortlistConfirmed(Array.from({length:9},(_,i)=>({symbol:'C'+i,selectionQuality:{total:81+i},volumeRatio:3})));
+assert.deepEqual(ranked.map(c=>c.symbol),['C8','C7','C6','C5','C4']);
+assert.equal(notificationPolicy.maxSignalsPerRound,3);assert.equal(notificationPolicy.earlyWatchNotifications,false);
+assert.equal(shortlistConfirmed([{symbol:'LOW',selectionQuality:{total:84}}]).length,0,'Never fill missing ranks with weaker candidates');
 console.log('Early-base causal detector checks passed');

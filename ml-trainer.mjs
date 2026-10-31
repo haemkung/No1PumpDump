@@ -45,6 +45,19 @@ try{
       try{const risk=Math.abs(r.entry-r.stop);r.reaction5m=await evaluateMaturedSignal({...r,target:r.entry+(r.side==='LONG'?1:-1)*.5*risk,evaluationHorizonMs:300000},json);}catch{failed++;}
     }
     await save('early-records.json',early);
+    // Silently observed setups have their own timestamps and cohort, never fake Telegram delivery.
+    const observations=await read('early-observed-records.json',{});
+    for(const r of Object.values(earlyState.journal||{}))if(r.status==='watch_observed'&&r.observedAt&&featureVector(r))observations[r.id]={...observations[r.id],...r};
+    for(const r of Object.values(observations))if(!r.reaction5m&&Date.now()>=Date.parse(r.observedAt)+300000){
+      try{const risk=Math.abs(r.entry-r.stop);r.reaction5m=await evaluateMaturedSignal({...r,sentAt:r.observedAt,target:r.entry+(r.side==='LONG'?1:-1)*.5*risk,evaluationHorizonMs:300000},json);}catch{failed++;}
+    }
+    await save('early-observed-records.json',observations);
+    const observed=Object.values(observations).filter(r=>r.reaction5m).sort((a,b)=>Date.parse(a.observedAt)-Date.parse(b.observedAt)).map(r=>({id:r.id,time:r.observedAt,x:featureVector(r),y:r.reaction5m.target}));
+    const observedFingerprint=createHash('sha256').update(JSON.stringify(observed)).digest('hex'),oldObserved=await read('early-observed-model.json',null);
+    if(observed.length>=20&&new Set(observed.map(s=>s.y)).size===2&&oldObserved?.fingerprint!==observedFingerprint){
+      const split=Math.max(12,Math.floor(observed.length*.75)),training=observed.slice(0,split),prior=training.reduce((sum,s)=>sum+s.y,0)/training.length;
+      await save('early-observed-model.json',{...fit(observed),trainedAt:new Date().toISOString(),trainingCount:observed.length,fingerprint:observedFingerprint,mode:'shadow',affectsLiveSelection:false,calibrated:false,cohort:'silent_observation_not_Telegram_delivery',target:'0.5R before invalidation within five minutes of observation',retrospectiveTemporalTest:evaluate(fit(training),observed.slice(split),prior)});
+    }
     const samples=Object.values(early).filter(r=>r.reaction5m).sort((a,b)=>Date.parse(a.sentAt)-Date.parse(b.sentAt)).map(r=>({id:r.id,time:r.sentAt,x:featureVector(r),y:r.reaction5m.target}));
     const fingerprint=createHash('sha256').update(JSON.stringify(samples)).digest('hex'),previous=await read('early-model.json',null);
     if(samples.length>=20&&new Set(samples.map(s=>s.y)).size===2&&previous?.fingerprint!==fingerprint){

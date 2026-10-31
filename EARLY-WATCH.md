@@ -1,5 +1,11 @@
 # Experimental early-base watch
 
+## Current notification policy
+
+Early-watch Telegram notifications are disabled. The worker continues scanning and recording AI-approved observations privately for learning. An observed timestamp is never represented as a Telegram delivery timestamp. Delivered alerts and silent observations retain separate outcome datasets and shadow models.
+
+Confirmed Sniper signals are shortlisted by the existing heuristic quality rubric: at least 85/100, highest five currently eligible confirmed setups, then Gemini review and fresh quote checks. Send at most three successful signals per 15-minute scan invocation, ranked by shortlist order among qualifying approvals. Do not fill missing ranks with weaker candidates. Ranking is among setups passing the market-wide filters, not a forecast of the five best-performing coins. Neither the new threshold nor ranking has demonstrated superior returns; this is a stricter notification policy requested by the user.
+
 This local-only worker checks all currently active Binance crypto USDT perpetual contracts every minute. The cloud backup retains its existing 15-minute confirmed-signal strategy. Turning off the PC stops this additional early watch.
 
 The detector uses only closed one-minute bars: a 20-minute range at most 1.5%, a liquidity sweep at least 0.05% beyond its edge with at least 2x baseline volume, and an immediate reclaim beyond the sweep candle with directional close strength at least 0.75. These provisional engineering thresholds are not demonstrated profitability or a calibrated confidence estimate.
