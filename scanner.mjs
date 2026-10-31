@@ -140,6 +140,10 @@ async function run(){
   }
   state.lastRun=new Date().toISOString();state.scanned=scanned;state.failed=failed;state.error=failed||stats.aiUnavailable?'partial_failure':null;state.provider=provider;state.lastRunner=process.env.MONITOR_ORIGIN==='local'?'local':'github';
   state.lastResult={totalMarkets:universe.totalMarkets,attempted:symbols.length,scope:universe.scope,scanSeconds:Math.round((Date.now()-scanStarted)/100)/10,sent,...stats,aiBudgetUsed:state.count};await save();
+  if(state.count>=MAX&&state.quotaNoticeDay!==day()){
+    await telegram('แจ้งสถานะโควตา No1 (ไม่ใช่สัญญาณซื้อขาย)\nวันนี้ใช้ AI ครบ '+MAX+'/'+MAX+' ครั้งแล้ว ตัวตรวจยังอ่านตลาดอยู่ แต่จะไม่ส่งสัญญาณใหม่ที่ยังไม่ผ่าน Gemini\nโควตารีเซ็ตอัตโนมัติเวลา 00:00 น. วันถัดไป เวลาไทย ตามเพดานที่ตั้งไว้ ไม่มีการเพิ่มโควตาหรือใช้บริการเสียเงินเอง');
+    state.quotaNoticeDay=day();await save();
+  }
   const heartbeatDue=previousRunner!==state.lastRunner||previousProvider!==provider||!state.lastHeartbeat||Date.now()-Date.parse(state.lastHeartbeat)>=6*3600000;
   if(heartbeatDue){
     const gap=previousRun?Math.round((Date.now()-Date.parse(previousRun))/60000):null;

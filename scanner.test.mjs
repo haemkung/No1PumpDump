@@ -4,13 +4,14 @@ const testNow=Math.floor(originalNow()/900000)*900000+60000;
 Date.now=()=>testNow;
 try{
   process.env.TELEGRAM_BOT_TOKEN='test-token';process.env.TELEGRAM_CHAT_ID='test-chat';process.env.GEMINI_API_KEY='test-key';
-  for(const scenario of ['stale','rejected','unavailable','quiet','approved','held','late','binance','deliveryFail']){
+  for(const scenario of ['stale','rejected','unavailable','quiet','approved','held','late','binance','deliveryFail','quotaNotice','quotaKnown']){
     process.env.MONITOR_ORIGIN=scenario==='binance'?'local':'github';
     Date.now=()=>testNow+(scenario==='late'?600000:0);
     const now=Date.now(), end=now-(scenario==='stale'?240000:60000);
     const candles=Array.from({length:20},(_,i)=>({time:end-899999-(21-i)*900000,high:100,low:98,close:99,volume:100}));
     candles.push({time:end-899999-900000,high:102,low:99,close:101,volume:160},{time:end-899999,high:101,low:99.8,close:100.5,volume:100});
-    const state={day:new Date(now+7*3600000).toISOString().slice(0,10),count:49,sent:{},aiVerified:true,cloudStarted:true,lastRunner:'github',provider:'kraken-futures',lastRun:new Date(now-4*3600000).toISOString(),...(scenario==='quiet'?{lastHeartbeat:new Date(now).toISOString()}:{} )};
+    const state={day:new Date(now+7*3600000).toISOString().slice(0,10),quotaNoticeDay:new Date(now+7*3600000).toISOString().slice(0,10),count:scenario.startsWith('quota')?50:49,sent:{},aiVerified:true,cloudStarted:true,lastRunner:'github',provider:'kraken-futures',lastRun:new Date(now-4*3600000).toISOString(),...(['quiet','quotaKnown'].includes(scenario)?{lastHeartbeat:new Date(now).toISOString()}:{} )};
+    if(scenario==='quotaNotice')delete state.quotaNoticeDay;
     let saved, aiCalls=0, messages=0, signals=0,marketReads=0,claimedCaption;
     const reply=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'content-type':'application/json'}});
     globalThis.fetch=async (url,options={})=>{
@@ -24,7 +25,7 @@ try{
       if(url.includes('/getFile?'))return reply({ok:true,result:{file_path:'private-test-state'}});
       if(url.includes('/file/bottest-token/'))return reply(state);
       if(url.endsWith('/editMessageMedia')){assert.equal(JSON.parse(options.body.get('media')).caption,claimedCaption,'state saves must retain the shared slot lock');saved=JSON.parse(await options.body.get('state').text());return reply({ok:true});}
-      if(url.endsWith('/sendMessage')){messages++;const text=JSON.parse(options.body).text;assert.ok(text.includes('\n'),'messages must contain real line breaks');assert.ok(!text.includes('\\n'),'do not send literal backslash-n');if(text.startsWith('สัญญาณทดลอง')){signals++;assert.ok(['approved','deliveryFail'].includes(scenario));assert.match(text,/คะแนนความมั่นใจตามเกณฑ์ \d{1,3}\/100/);assert.ok(text.includes('ไม่ใช่เปอร์เซ็นต์โอกาสชนะ'));assert.ok(text.includes('แท่งปิด'));assert.ok(text.includes('ตรวจยืนยัน'));}else assert.match(text,/รายงานระบบ No1/);if(scenario==='deliveryFail'&&text.startsWith('สัญญาณทดลอง'))return reply({ok:false},503);return reply({ok:true,result:{message_id:123,date:Math.floor(Date.now()/1000)}});}
+      if(url.endsWith('/sendMessage')){messages++;const text=JSON.parse(options.body).text;assert.ok(text.includes('\n'),'messages must contain real line breaks');assert.ok(!text.includes('\\n'),'do not send literal backslash-n');if(text.startsWith('สัญญาณทดลอง')){signals++;assert.ok(['approved','deliveryFail'].includes(scenario));assert.match(text,/คะแนนความมั่นใจตามเกณฑ์ \d{1,3}\/100/);assert.ok(text.includes('ไม่ใช่เปอร์เซ็นต์โอกาสชนะ'));assert.ok(text.includes('แท่งปิด'));assert.ok(text.includes('ตรวจยืนยัน'));}else assert.match(text,/รายงานระบบ No1|แจ้งสถานะโควตา No1/);if(scenario==='deliveryFail'&&text.startsWith('สัญญาณทดลอง'))return reply({ok:false},503);return reply({ok:true,result:{message_id:123,date:Math.floor(Date.now()/1000)}});}
       if(url.endsWith('/tickers')){marketReads++;return reply({tickers:[
         {symbol:'PF_TESTUSD',tag:'perpetual',volumeQuote:2000000,bid:100.48,ask:100.5},
         {symbol:'PF_OTHERUSD',tag:'perpetual',volumeQuote:25000000,bid:100.48,ask:100.5},
@@ -41,8 +42,8 @@ try{
     assert.equal(signals,['approved','deliveryFail'].includes(scenario)?1:0);if(scenario==='deliveryFail'){const j=Object.values(saved.journal)[0];assert.equal(j.status,'delivery_unknown');assert.ok(saved.sent[j.id]);assert.equal(saved.lastResult.sent,0);}
     if(scenario==='approved'){const records=Object.values(saved.journal);assert.equal(records.length,1);assert.equal(records[0].status,'sent');assert.equal(records[0].messageId,123);assert.ok(records[0].sentAt);assert.equal(records[0].entry,100.5);assert.equal(records[0].shadow.affectsLiveSelection,false);}
     assert.equal(saved.count,scenario==='stale'?49:50,'persist quota before request and never exceed 50');
-    assert.equal(aiCalls,scenario==='stale'?0:1);
-    assert.equal(messages,scenario==='quiet'?0:['approved','deliveryFail'].includes(scenario)?2:1,'status heartbeat must be throttled');
+    assert.equal(aiCalls,scenario==='stale'||scenario.startsWith('quota')?0:1);
+    assert.equal(messages,['quiet','quotaKnown'].includes(scenario)?0:scenario==='quotaNotice'?2:['approved','deliveryFail'].includes(scenario)?2:1,'status heartbeat must be throttled');
     if(scenario==='stale')assert.equal(saved.lastResult.stale,2);
     if(scenario==='rejected')assert.equal(saved.lastResult.aiRejected,1);
     if(scenario==='unavailable'){assert.equal(saved.lastResult.aiUnavailable,1);assert.equal(saved.error,'partial_failure');}
