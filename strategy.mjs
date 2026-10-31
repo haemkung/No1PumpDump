@@ -6,9 +6,11 @@ export function findSignal(bars) {
   const avg=base.reduce((s,b)=>s+b.volume,0)/base.length;
   if(!(avg>0) || breakout.volume<1.5*avg) return null;
   const common={time:last.time,end:last.end,entry:last.close,volumeRatio:breakout.volume/avg};
+  const range=last.high-last.low;
+  const closeLocation=range>0?(last.close-last.low)/range:.5;
   if(breakout.close>top && last.low<=top*1.001 && last.low>=top*.995 && last.close>top)
-    return {...common,side:'LONG',stop:last.low*.999};
+    return {...common,side:'LONG',stop:last.low*.999,closeStrength:closeLocation};
   if(breakout.close<bottom && last.high>=bottom*.999 && last.high<=bottom*1.005 && last.close<bottom)
-    return {...common,side:'SHORT',stop:last.high*1.001};
+    return {...common,side:'SHORT',stop:last.high*1.001,closeStrength:1-closeLocation};
   return null;
 }

@@ -1,5 +1,9 @@
 # No1 Crypto Watch Cloud
 
+## Learning audit and private journal
+
+Delivered signals now retain exact entry, stop, target, exchange, candle close, verification time, Telegram receipt time/message ID, score components, features and strategy version in the private pinned Telegram state. Pending/uncertain deliveries are distinct from confirmed sends. Nothing from this journal belongs in public GitHub files. A close-strength >=70% candidate filter is logged in shadow mode, without changing live selection or consuming AI calls. Retrospective comparisons on 49 alerts are exploratory, not independent validation; higher heuristic scores did not establish higher win rates. New messages distinguish candle-close time from verification time, and audits use the actual Telegram send time.
+
 ## Signal quality score
 
 Each delivered signal includes a heuristic score out of 100 after all existing filters and Gemini approval. Rubric quality-v1: validated structure 30, relative breakout volume 25 (1.5x to 3x), spread 15 (0.1% to zero), entry drift 15 (0.3% to zero), freshness 15 (180 seconds to zero). Components are clamped and rounded. It is not a calibrated win probability, does not change the entry filters, and requires no additional AI calls. Scores from this rubric should not be compared with future rubric versions without adjustment.

@@ -48,7 +48,7 @@ async function json(url,options={}){
 const provider=process.env.MONITOR_ORIGIN==='local'?'binance-futures':'kraken-futures';
 const market=createMarketData(provider,json);
 const quote=symbol=>market.quote(symbol);
-async function telegram(text){const r=await json(`https://api.telegram.org/bot${token}/sendMessage`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:chat,text,disable_web_page_preview:true})});if(!r.ok)throw new Error('Telegram rejected message');}
+async function telegram(text){const r=await json(`https://api.telegram.org/bot${token}/sendMessage`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:chat,text,disable_web_page_preview:true})});if(!r.ok)throw new Error('Telegram rejected message');return r.result;}
 async function review(candidate){
   if(state.day!==day()){state.day=day();state.count=0;}
   if(state.count>=MAX)return null;
@@ -72,7 +72,7 @@ async function run(){
   const clock={serverTime:universe.serverTime},symbols=universe.symbols;
   if(!symbols.length)throw new Error('No liquid markets');
   const candidates=[];let failed=0,scanned=0;
-  const stats={patterns:0,stale:0,duplicate:0,quoteRejected:0,aiReviewed:0,aiRejected:0,aiUnavailable:0,marketDataFailed:0,insufficientHistory:0};
+  const stats={patterns:0,stale:0,duplicate:0,quoteRejected:0,aiReviewed:0,aiRejected:0,aiUnavailable:0,marketDataFailed:0,insufficientHistory:0,shadowClosePass:0};
   // Keep each invocation bounded; GitHub schedules may be late. Never alert on stale bars.
   for(let offset=0;offset<symbols.length;offset+=6){await Promise.all(symbols.slice(offset,offset+6).map(async symbol=>{
     try{
@@ -82,6 +82,7 @@ async function run(){
       if(bars.length<22){stats.insufficientHistory++;return;}
       const s=findSignal(bars);if(!s)return;
       stats.patterns++;
+      if(s.closeStrength>=.7)stats.shadowClosePass++;
       if(clock.serverTime-s.end>freshMs){stats.stale++;return;}
       if(state.sent?.[`${provider}-${symbol}-${s.side}-${s.time}`]||state.sent?.[`${symbol}-${s.side}-${s.time}`]){stats.duplicate++;return;}
       candidates.push({symbol,...s,candles:bars.slice(-40)});
@@ -115,8 +116,15 @@ async function run(){
       if(!quality)continue;
       const id=`${provider}-${s.symbol}-${s.side}-${s.time}`;
       // Record before delivery: at-most-once attempt avoids repeated stale entries after a network ambiguity.
-      state.sent??={};state.sent[id]=new Date().toISOString();await save();
-      await telegram(`สัญญาณทดลอง ${s.symbol} ${s.side}\nคะแนนความมั่นใจตามเกณฑ์ ${quality.total}/100\nคะแนนคุณภาพสัญญาณ ไม่ใช่เปอร์เซ็นต์โอกาสชนะ\nแหล่งข้อมูล: ${market.label}\nกราฟ 15 นาที | ${new Date(s.end).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nราคาอ้างอิง ${entry}\nStop ${s.stop}\nเป้า 2R ${target}\nเหตุผล: ทะลุกรอบพร้อม Volume แล้วทดสอบกลับ\nGemini: ${result.reason}\nหมดอายุเมื่อปิดแท่งถัดไปหรือแตะ Stop ห้ามไล่ราคา ตรวจราคาในแอปก่อนเข้า\nระบบทดลอง ยังไม่พิสูจน์อัตราชนะ ไม่ได้ส่งคำสั่งซื้อขาย`);sent++;
+      state.sent??={};state.sent[id]=new Date().toISOString();
+      state.journal??={};
+      const record={id,provider,symbol:s.symbol,side:s.side,entry,stop:s.stop,target,candleTime:s.time,candleClosedAt:new Date(s.end).toISOString(),verifiedAt:new Date().toISOString(),expiresAt:new Date(s.time+1800000).toISOString(),status:'delivery_pending',quality,features:{volumeRatio:s.volumeRatio,closeStrength:s.closeStrength,spreadRatio:(fa-fb)/fb,entryDrift:Math.abs(price-s.entry)/s.entry},strategyVersion:'breakout-retest-v1',shadow:{version:'close-strength-70-v1',pass:s.closeStrength>=.7,affectsLiveSelection:false}};
+      state.journal[id]=record;await save();
+      try{
+        const receipt=await telegram(`สัญญาณทดลอง ${s.symbol} ${s.side}\nคะแนนความมั่นใจตามเกณฑ์ ${quality.total}/100\nคะแนนคุณภาพสัญญาณ ไม่ใช่เปอร์เซ็นต์โอกาสชนะ\nแหล่งข้อมูล: ${market.label}\nกราฟ 15 นาที | แท่งปิด ${new Date(s.end).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nตรวจยืนยัน ${new Date().toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nราคาอ้างอิง ${entry}\nStop ${s.stop}\nเป้า 2R ${target}\nเหตุผล: ทะลุกรอบพร้อม Volume แล้วทดสอบกลับ\nGemini: ${result.reason}\nหมดอายุเมื่อปิดแท่งถัดไปหรือแตะ Stop ห้ามไล่ราคา ตรวจราคาในแอปก่อนเข้า\nระบบทดลอง ยังไม่พิสูจน์อัตราชนะ ไม่ได้ส่งคำสั่งซื้อขาย`);
+        record.status='sent';record.messageId=receipt?.message_id??null;record.sentAt=receipt?.date?new Date(receipt.date*1000).toISOString():null;sent++;
+      }catch{record.status='delivery_unknown';throw Error('Signal delivery uncertain');}
+      finally{await save();}
     }catch{failed++;}
   }
   state.lastRun=new Date().toISOString();state.scanned=scanned;state.failed=failed;state.error=failed||stats.aiUnavailable?'partial_failure':null;state.provider=provider;state.lastRunner=process.env.MONITOR_ORIGIN==='local'?'local':'github';
