@@ -63,6 +63,7 @@ async function run(){
   if(!await claimSlot()){console.log(JSON.stringify({skipped:true,reason:'outside_fresh_window_or_slot_already_claimed'}));return;}
   if(state.day!==day()){state.day=day();state.count=0;await save();}
   const previousRun=state.lastRun;
+  const previousRunner=state.lastRunner;
   const clock={serverTime:Date.now()}, snapshot=await tickers();
   const markets=snapshot.tickers.filter(t=>t.tag==='perpetual'&&/^PF_[A-Z0-9]+USD$/.test(t.symbol)&&!t.suspended);
   const symbols=markets.filter(t=>Number(t.volumeQuote)>=1000000).map(t=>t.symbol);
@@ -113,7 +114,7 @@ async function run(){
   }
   state.lastRun=new Date().toISOString();state.scanned=symbols.length;state.failed=failed;state.error=failed||stats.aiUnavailable?'partial_failure':null;state.provider='kraken-futures';state.lastRunner=process.env.MONITOR_ORIGIN==='local'?'local':'github';
   state.lastResult={totalMarkets:markets.length,sent,...stats,aiBudgetUsed:state.count};await save();
-  const heartbeatDue=!state.lastHeartbeat||Date.now()-Date.parse(state.lastHeartbeat)>=6*3600000;
+  const heartbeatDue=previousRunner!==state.lastRunner||!state.lastHeartbeat||Date.now()-Date.parse(state.lastHeartbeat)>=6*3600000;
   if(heartbeatDue){
     const gap=previousRun?Math.round((Date.now()-Date.parse(previousRun))/60000):null;
     const lines=[
@@ -125,7 +126,7 @@ async function run(){
       `AI ปฏิเสธ ${stats.aiRejected} | AI ไม่พร้อม ${stats.aiUnavailable} | ข้อมูล/ส่งข้อความล้มเหลว ${failed}`,
       `ใช้ AI ${state.count}/50 ครั้งวันนี้`,
       gap===null?'ยังไม่มีรอบก่อนหน้าให้เทียบ':`ห่างจากรอบก่อน ${gap} นาที${gap>35?' — ตาราง GitHub ล่าช้า ระบบไม่ได้ตรวจต่อเนื่องทุก 15 นาที':''}`,
-      'รายงานสถานะส่งไม่เกินทุก 6 ชั่วโมง สัญญาณจริงส่งทันทีเมื่อครบเงื่อนไขในรอบที่รัน'
+      'รายงานทุก 6 ชั่วโมงหรือเมื่อเปลี่ยนตัวตรวจ สัญญาณจริงส่งทันทีเมื่อครบเงื่อนไขในรอบที่รัน'
     ];
     state.lastHeartbeat=new Date().toISOString();await save();await telegram(lines.join('\n'));
   }

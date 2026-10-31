@@ -9,7 +9,7 @@ try{
     const now=Date.now(), end=now-(scenario==='stale'?240000:60000);
     const candles=Array.from({length:20},(_,i)=>({time:end-899999-(21-i)*900000,high:100,low:98,close:99,volume:100}));
     candles.push({time:end-899999-900000,high:102,low:99,close:101,volume:160},{time:end-899999,high:101,low:99.8,close:100.5,volume:100});
-    const state={day:new Date(now+7*3600000).toISOString().slice(0,10),count:49,sent:{},aiVerified:true,cloudStarted:true,lastRun:new Date(now-4*3600000).toISOString(),...(scenario==='quiet'?{lastHeartbeat:new Date(now).toISOString()}:{} )};
+    const state={day:new Date(now+7*3600000).toISOString().slice(0,10),count:49,sent:{},aiVerified:true,cloudStarted:true,lastRunner:'github',lastRun:new Date(now-4*3600000).toISOString(),...(scenario==='quiet'?{lastHeartbeat:new Date(now).toISOString()}:{} )};
     let saved, aiCalls=0, messages=0, signals=0,marketReads=0,claimedCaption;
     const reply=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'content-type':'application/json'}});
     globalThis.fetch=async (url,options={})=>{
