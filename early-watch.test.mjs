@@ -14,7 +14,7 @@ try{
  if(url.includes('exchangeInfo'))data={symbols:[{symbol:'TESTUSDT',status:'TRADING',contractType:'PERPETUAL',quoteAsset:'USDT',underlyingType:'COIN'}]};
  else if(url.endsWith('/time'))data={serverTime:now};else if(url.includes('/klines'))data=b;
  else if(url.includes('bookTicker'))data={bidPrice:'100.29',askPrice:'100.3'};
- else if(url.includes('generateContent')){if(process.env.TEST_MODE==='outage')return new Response('',{status:429});data={candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({approve:process.env.TEST_MODE!=='reject',reason:'รูปแบบทดลอง'})}]}}]};}
+ else if(url.includes('generateContent')){if(process.env.TEST_MODE==='outage')return new Response('',{status:429});data={candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({approve:process.env.TEST_MODE!=='reject',reason:'รูปแบบทดลอง',confidence:process.env.TEST_MODE==='restore'?'high':'medium'})}]}}]};}
  else if(url.endsWith('/getChat'))data={ok:true,result:{pinned_message:{document:{file_name:'no1-monitor-state.json',file_id:'fixture'}}}};
  else if(url.includes('/getFile?'))data={ok:true,result:{file_path:'fixture-state'}};
  else if(url.includes('/file/bot'))data={journal:{}};
@@ -26,7 +26,7 @@ try{
   const result=spawnSync(process.execPath,args,{env,encoding:'utf8',timeout:20000});assert.equal(result.status,0,result.stderr);
   const state=JSON.parse(await readFile(join(stateDir,'state.json'),'utf8')),rows=Object.values(state.journal);
   if(mode==='approve'||mode==='uncertain'||mode==='restore'){
-   assert.equal(rows.length,1);if(mode==='restore'){assert.equal(rows[0].status,'watch_sent');assert.equal(state.silenceFallback.decision,'restore_early');assert.ok(rows[0].sentAt);}else{assert.equal(rows[0].status,'watch_observed');assert.ok(rows[0].observedAt);assert.equal(rows[0].sentAt,undefined);}
+   assert.equal(rows.length,1);if(mode==='restore'){assert.equal(rows[0].status,'watch_sent');assert.equal(rows[0].aiAssessment,'high');assert.ok(rows[0].sentAt);}else{assert.equal(rows[0].status,'watch_observed');assert.ok(rows[0].observedAt);assert.equal(rows[0].sentAt,undefined);}
    const repeat=spawnSync(process.execPath,args,{env,encoding:'utf8',timeout:20000});assert.equal(repeat.status,0,repeat.stderr);
    const again=JSON.parse(await readFile(join(stateDir,'state.json'),'utf8'));assert.equal(again.aiCount,1,'Sent/uncertain alert must not be sent or reviewed again');
   }else assert.equal(rows.length,0,'Rejected/unavailable AI must not send a watch');
