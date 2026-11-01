@@ -18,6 +18,8 @@ try{
   $env:TELEGRAM_BOT_TOKEN=[Net.NetworkCredential]::new('',$telegram.Token).Password
   $env:TELEGRAM_CHAT_ID=[string]$telegram.ChatId
   $env:GEMINI_API_KEY=[Net.NetworkCredential]::new('',$gemini).Password
+  $groqPath=Join-Path $secretDir 'groq.xml'
+  if(Test-Path -LiteralPath $groqPath){$env:GROQ_API_KEY=[Net.NetworkCredential]::new('',(Import-Clixml -LiteralPath $groqPath)).Password}
   $env:MONITOR_ORIGIN='local'
   do{
     $started=[DateTime]::UtcNow.ToString('o')
@@ -38,6 +40,6 @@ try{
   Save-Runtime @{status='setup_failed';updated=[DateTime]::UtcNow.ToString('o');pid=$PID}
   throw 'Local monitor setup failed; credentials are not logged.'
 }finally{
-  Remove-Item Env:TELEGRAM_BOT_TOKEN,Env:TELEGRAM_CHAT_ID,Env:GEMINI_API_KEY,Env:MONITOR_ORIGIN -ErrorAction SilentlyContinue
+  Remove-Item Env:TELEGRAM_BOT_TOKEN,Env:TELEGRAM_CHAT_ID,Env:GEMINI_API_KEY,Env:GROQ_API_KEY,Env:MONITOR_ORIGIN -ErrorAction SilentlyContinue
   $mutex.ReleaseMutex();$mutex.Dispose()
 }

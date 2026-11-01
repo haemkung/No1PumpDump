@@ -6,5 +6,7 @@ try{
   $secret=Import-Clixml (Join-Path $secretDir 'telegram.xml');$gemini=Import-Clixml (Join-Path $secretDir 'gemini.xml')
   $env:TELEGRAM_BOT_TOKEN=[Net.NetworkCredential]::new('',$secret.Token).Password;$env:TELEGRAM_CHAT_ID=[string]$secret.ChatId;$env:GEMINI_API_KEY=[Net.NetworkCredential]::new('',$gemini).Password
   $node=Join-Path $env:USERPROFILE '.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe'
+  $groqPath=Join-Path $secretDir 'groq.xml'
+  if(Test-Path -LiteralPath $groqPath){$env:GROQ_API_KEY=[Net.NetworkCredential]::new('',(Import-Clixml -LiteralPath $groqPath)).Password}
   & $node (Join-Path $PSScriptRoot 'early-watch.mjs');if($LASTEXITCODE -ne 0){throw 'Early watch deferred'}
-}finally{Remove-Item Env:TELEGRAM_BOT_TOKEN,Env:TELEGRAM_CHAT_ID,Env:GEMINI_API_KEY -ErrorAction SilentlyContinue;$mutex.ReleaseMutex();$mutex.Dispose()}
+}finally{Remove-Item Env:TELEGRAM_BOT_TOKEN,Env:TELEGRAM_CHAT_ID,Env:GEMINI_API_KEY,Env:GROQ_API_KEY -ErrorAction SilentlyContinue;$mutex.ReleaseMutex();$mutex.Dispose()}

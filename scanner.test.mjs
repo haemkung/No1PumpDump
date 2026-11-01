@@ -5,8 +5,8 @@ Date.now=()=>testNow;
 try{
   process.env.TELEGRAM_BOT_TOKEN='test-token';process.env.TELEGRAM_CHAT_ID='test-chat';process.env.GEMINI_API_KEY='test-key';
   process.env.MONITOR_WATCH_MS='0';process.env.MONITOR_REVIEW_PAUSE_MS='0';
-  for(const scenario of ['stale','rejected','unavailable','quiet','approved','held','late','binance','deliveryFail','over50','noTrigger','manyApproved','lowQuality']){
-    process.env.MONITOR_ORIGIN=['binance','manyApproved'].includes(scenario)?'local':'github';
+  for(const scenario of ['stale','rejected','unavailable','quiet','approved','held','late','binance','deliveryFail','over50','noTrigger','manyApproved','lowQuality','groqApproved']){
+    process.env.MONITOR_ORIGIN=['binance','manyApproved'].includes(scenario)?'local':'github';process.env.GROQ_API_KEY=scenario==='groqApproved'?'test-groq':'';
     Date.now=()=>testNow+(scenario==='late'?600000:0);
     const now=Date.now(), end=now-(scenario==='stale'?240000:60000);
     const candles=Array.from({length:20},(_,i)=>({time:end-899999-(21-i)*900000,high:100,low:98,close:99,volume:100}));
@@ -28,27 +28,28 @@ try{
       if(url.includes('/getFile?'))return reply({ok:true,result:{file_path:'private-test-state'}});
       if(url.includes('/file/bottest-token/'))return reply(state);
       if(url.endsWith('/editMessageMedia')){assert.equal(JSON.parse(options.body.get('media')).caption,claimedCaption,'state saves must retain the shared slot lock');saved=JSON.parse(await options.body.get('state').text());return reply({ok:true});}
-      if(url.endsWith('/sendMessage')){messages++;const text=JSON.parse(options.body).text;assert.ok(text.includes('\n'),'messages must contain real line breaks');assert.ok(!text.includes('\\n'),'do not send literal backslash-n');if(text.startsWith('สัญญาณทดลอง')){signals++;assert.ok(['approved','deliveryFail','manyApproved'].includes(scenario));assert.match(text,/คะแนนความมั่นใจตามเกณฑ์ \d{1,3}\/100/);assert.ok(text.includes('ไม่ใช่เปอร์เซ็นต์โอกาสชนะ'));assert.ok(text.includes('แท่งปิด'));assert.ok(text.includes('ตรวจยืนยัน'));}else assert.match(text,/รายงานระบบ No1|แจ้งสถานะ No1/);if(scenario==='deliveryFail'&&text.startsWith('สัญญาณทดลอง'))return reply({ok:false},503);return reply({ok:true,result:{message_id:123,date:Math.floor(Date.now()/1000)}});}
+      if(url.endsWith('/sendMessage')){messages++;const text=JSON.parse(options.body).text;assert.ok(text.includes('\n'),'messages must contain real line breaks');assert.ok(!text.includes('\\n'),'do not send literal backslash-n');if(text.startsWith('สัญญาณทดลอง')){signals++;assert.ok(['approved','deliveryFail','manyApproved','groqApproved'].includes(scenario));assert.match(text,/คะแนนความมั่นใจตามเกณฑ์ \d{1,3}\/100/);assert.ok(text.includes('ไม่ใช่เปอร์เซ็นต์โอกาสชนะ'));assert.ok(text.includes('แท่งปิด'));assert.ok(text.includes('ตรวจยืนยัน'));}else assert.match(text,/รายงานระบบ No1|แจ้งสถานะ No1/);if(scenario==='deliveryFail'&&text.startsWith('สัญญาณทดลอง'))return reply({ok:false},503);return reply({ok:true,result:{message_id:123,date:Math.floor(Date.now()/1000)}});}
       if(url.endsWith('/tickers')){marketReads++;return reply({tickers:[
         {symbol:'PF_TESTUSD',tag:'perpetual',volumeQuote:2000000,bid:100.48,ask:100.5},
         {symbol:'PF_OTHERUSD',tag:'perpetual',volumeQuote:25000000,bid:100.48,ask:100.5},
         {symbol:'PF_THINUSD',tag:'perpetual',volumeQuote:500000,bid:100.48,ask:100.5}]});}
       if(url.includes('/api/charts/'))return reply({candles:url.endsWith('/1m')?minute:candles});
-      if(url.includes('generativelanguage.googleapis.com')){aiCalls++;if(scenario==='unavailable')return reply({},429);return reply({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({approve:['approved','deliveryFail','manyApproved'].includes(scenario),reason:'test review'})}]}}]});}
+      if(url.includes('api.groq.com')){assert.equal(scenario,'groqApproved');aiCalls++;return reply({choices:[{finish_reason:'stop',message:{content:JSON.stringify({approve:true,reason:'test Groq review'})}}]});}
+      if(url.includes('generativelanguage.googleapis.com')){aiCalls++;if(scenario==='unavailable')return reply({},429);return reply({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({approve:['approved','deliveryFail','manyApproved','groqApproved'].includes(scenario),reason:'test review'})}]}}]});}
       throw Error('Unexpected request in isolated test');
     };
     await import('./scanner.mjs?test='+scenario);
     if(scenario==='held'||scenario==='late'){assert.equal(saved,undefined,'losing or late runner must not overwrite shared quota');assert.equal(aiCalls,0);assert.equal(messages,0);assert.equal(marketReads,0);continue;}
     assert.equal(saved.scanned,scenario==='manyApproved'?8:scenario==='binance'?3:2,'Binance includes thin markets; Kraken backup retains its threshold');
     if(scenario==='binance'){assert.equal(saved.provider,'binance-futures');assert.equal(saved.lastRunner,'local');assert.equal(saved.lastResult.attempted,3);}
-    assert.equal(saved.lastResult.sent,scenario==='manyApproved'?3:scenario==='approved'?2:0,'only approved fresh setup may become a signal; maximum three');
-    assert.equal(signals,scenario==='manyApproved'?3:['approved','deliveryFail'].includes(scenario)?2:0);if(scenario==='deliveryFail'){const j=Object.values(saved.journal)[0];assert.equal(j.status,'delivery_unknown');assert.ok(saved.sent[j.id]);assert.equal(saved.lastResult.sent,0);}
-    if(scenario==='approved'){const records=Object.values(saved.journal);assert.equal(records.length,2);assert.equal(records[0].status,'sent');assert.equal(records[0].messageId,123);assert.ok(records[0].sentAt);assert.equal(records[0].entry,100.5);assert.equal(records[0].shadow.affectsLiveSelection,false);}
+    assert.equal(saved.lastResult.sent,scenario==='manyApproved'?3:['approved','groqApproved'].includes(scenario)?2:0,'only approved fresh setup may become a signal; maximum three');
+    assert.equal(signals,scenario==='manyApproved'?3:['approved','deliveryFail','groqApproved'].includes(scenario)?2:0);if(scenario==='deliveryFail'){const j=Object.values(saved.journal)[0];assert.equal(j.status,'delivery_unknown');assert.ok(saved.sent[j.id]);assert.equal(saved.lastResult.sent,0);}
+    if(['approved','groqApproved'].includes(scenario)){const records=Object.values(saved.journal);assert.equal(records.length,2);assert.equal(records[0].status,'sent');assert.equal(records[0].messageId,123);assert.ok(records[0].sentAt);assert.equal(records[0].entry,100.5);assert.equal(records[0].shadow.affectsLiveSelection,false);}
     if(scenario==='manyApproved'){const r=Object.values(saved.journal);assert.equal(r.length,3);assert.deepEqual(r.map(x=>x.selection.rank),[1,2,3]);assert.ok(r.every(x=>x.selection.shortlistCount===5));}
-    const expectedCalls=['stale','noTrigger'].includes(scenario)?0:scenario==='unavailable'?3:['binance','manyApproved'].includes(scenario)?3:2;
+    const expectedCalls=['stale','noTrigger'].includes(scenario)?0:scenario==='unavailable'?2:['binance','manyApproved'].includes(scenario)?3:2;
     assert.equal(aiCalls,expectedCalls);
     assert.equal(saved.count,(scenario==='over50'?50:49)+expectedCalls,'no application daily cap; attempts still recorded');
-    assert.equal(messages,scenario==='manyApproved'?4:scenario==='quiet'?0:['approved','deliveryFail'].includes(scenario)?3:1,'signals plus throttled heartbeat only');
+    assert.equal(messages,scenario==='manyApproved'?4:scenario==='quiet'?0:['approved','deliveryFail','groqApproved'].includes(scenario)?3:1,'signals plus throttled heartbeat only');
     if(scenario==='stale')assert.equal(saved.lastResult.stale,2);
     if(scenario==='rejected')assert.equal(saved.lastResult.aiRejected,2);
     if(scenario==='unavailable'){assert.equal(saved.lastResult.aiUnavailable,1);assert.equal(saved.error,'partial_failure');}
@@ -56,6 +57,6 @@ try{
 }finally{
   globalThis.fetch=originalFetch;
   Date.now=originalNow;
-  for(const key of ['TELEGRAM_BOT_TOKEN','TELEGRAM_CHAT_ID','GEMINI_API_KEY','MONITOR_ORIGIN','MONITOR_WATCH_MS','MONITOR_REVIEW_PAUSE_MS']){if(originalEnv[key]===undefined)delete process.env[key];else process.env[key]=originalEnv[key];}
+  for(const key of ['TELEGRAM_BOT_TOKEN','TELEGRAM_CHAT_ID','GEMINI_API_KEY','GROQ_API_KEY','MONITOR_ORIGIN','MONITOR_WATCH_MS','MONITOR_REVIEW_PAUSE_MS']){if(originalEnv[key]===undefined)delete process.env[key];else process.env[key]=originalEnv[key];}
 }
 console.log('PASS: wider coverage, stale rejection, AI rejection/outage, no daily cap, minute confirmation, provider backoff, heartbeat throttling');

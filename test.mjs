@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+await import('./ai-review-client.test.mjs');
 await import('./silence-fallback.test.mjs');
 await import('./review-fallback.test.mjs');
 await import('./score-validation.test.mjs');

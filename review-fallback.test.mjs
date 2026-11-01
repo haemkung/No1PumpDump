@@ -8,5 +8,6 @@ const skipped=[];await reviewWithFallback({state,now:()=>100001,request:async m=
 let n=0;const rejected=await reviewWithFallback({state:{},request:async()=>{n++;return response(false);}});assert.equal(rejected.approve,false);assert.equal(n,1);
 n=0;assert.equal(await reviewWithFallback({state:{},request:async()=>{n++;return {candidates:[{finishReason:'MAX_TOKENS'}]};}}),null);assert.equal(n,1);
 await assert.rejects(reviewWithFallback({state:{},request:async()=>{throw Error('Remote service HTTP 503');}}),e=>e.code==='AI_UNAVAILABLE');
-n=0;await assert.rejects(reviewWithFallback({state:{},request:async()=>{n++;throw Error('Remote service HTTP 401');}}));assert.equal(n,1,'Do not cycle invalid credentials');
+n=0;await assert.rejects(reviewWithFallback({state:{},models:['gemini-3.1-flash-lite','gemini-3.5-flash-lite'],request:async()=>{n++;throw Error('Remote service HTTP 401');}}));assert.equal(n,1,'Do not cycle the same invalid credential');
+const otherProvider=await reviewWithFallback({state:{},request:async model=>{if(model.startsWith('groq:'))throw Error('Remote service HTTP 401');return response(false);}});assert.equal(otherProvider.model,'gemini-3.1-flash-lite','A separate authorized provider can recover from expired Groq credentials');
 console.log('Fallback checks passed: quota switch/cooldown/rejection/refusal/all unavailable/auth failure');
