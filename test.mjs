@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+await import('./review-fallback.test.mjs');
 await import('./score-validation.test.mjs');
 await import('./early-base.test.mjs');
 await import('./early-watch.test.mjs');

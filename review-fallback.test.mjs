@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {reviewWithFallback,reviewModels} from './review-fallback.mjs';
+const response=approve=>({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({approve,reason:'fixture'})}]}}]});
+const state={},attempts=[];
+const r=await reviewWithFallback({state,now:()=>100000,request:async model=>{attempts.push(model);if(model===reviewModels[0])throw Error('Remote service HTTP 429');return response(true);}});
+assert.equal(r.model,reviewModels[1]);assert.equal(attempts.length,2);
+const skipped=[];await reviewWithFallback({state,now:()=>100001,request:async m=>{skipped.push(m);return response(false);}});assert.deepEqual(skipped,[reviewModels[1]],'Skip model in cooldown and respect rejection');
+let n=0;const rejected=await reviewWithFallback({state:{},request:async()=>{n++;return response(false);}});assert.equal(rejected.approve,false);assert.equal(n,1);
+n=0;assert.equal(await reviewWithFallback({state:{},request:async()=>{n++;return {candidates:[{finishReason:'MAX_TOKENS'}]};}}),null);assert.equal(n,1);
+await assert.rejects(reviewWithFallback({state:{},request:async()=>{throw Error('Remote service HTTP 503');}}),e=>e.code==='AI_UNAVAILABLE');
+n=0;await assert.rejects(reviewWithFallback({state:{},request:async()=>{n++;throw Error('Remote service HTTP 401');}}));assert.equal(n,1,'Do not cycle invalid credentials');
+console.log('Fallback checks passed: quota switch/cooldown/rejection/refusal/all unavailable/auth failure');
