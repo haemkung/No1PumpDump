@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {earlyBase,earlyScore} from './early-base.mjs';
 import {earlyForecast,prospectiveEarlyMetrics} from './early-learning.mjs';
-import {shortlistConfirmed,notificationPolicy} from './notification-policy.mjs';
+import {shortlistConfirmed,notificationPolicy,earlyNotificationDue} from './notification-policy.mjs';
 const base=Array.from({length:20},(_,i)=>({time:i*60000,end:i*60000+59999,open:100.2,high:100.5,low:100,close:100.1,volume:100}));
 const long=[...base,{time:1200000,end:1259999,open:100.1,high:100.1,low:99.8,close:99.95,volume:250},{time:1260000,end:1319999,open:99.95,high:100.3,low:99.95,close:100.3,volume:120}];
 assert.equal(earlyBase(long,1320000)?.side,'LONG');
@@ -27,4 +27,8 @@ assert.deepEqual(ranked.map(c=>c.symbol),['C8','C7','C6','C5','C4']);
 assert.equal(notificationPolicy.maxSignalsPerRound,3);assert.equal(notificationPolicy.earlyWatchNotifications,true);assert.equal(notificationPolicy.earlyHighOnly,true);
 assert.equal(shortlistConfirmed([{symbol:'VALID',selectionQuality:{total:84}}]).length,1,'Unvalidated absolute cutoff must not veto a confirmed setup');
 assert.equal(shortlistConfirmed([{symbol:'INVALID',selectionQuality:{total:NaN}}]).length,0,'Missing quality is still rejected');
+const lastAttempt=Date.parse('2026-11-01T00:00:00Z');
+assert.equal(earlyNotificationDue({lastEarlyAttemptAt:new Date(lastAttempt).toISOString()},lastAttempt+899999),false);
+assert.equal(earlyNotificationDue({lastEarlyAttemptAt:new Date(lastAttempt).toISOString()},lastAttempt+900000),true);
+assert.equal(earlyNotificationDue({journal:{a:{status:'delivery_unknown',deliveryAttemptAt:new Date(lastAttempt).toISOString()}}},lastAttempt+60000),false,'Uncertain delivery must also reserve the global quiet interval');
 console.log('Early-base causal detector checks passed');

@@ -11,7 +11,7 @@ try{
  const b=Array.from({length:22},(_,i)=>[t+(i-22)*60000,100.2,100.5,100,100.1,100,t+(i-21)*60000-1]);
  b[20]=[t-120000,100.1,100.1,99.8,99.95,250,t-60001];b[21]=[t-60000,99.95,100.3,99.95,100.3,120,t-1];
  globalThis.fetch=async(url)=>{let data;
- if(url.includes('exchangeInfo'))data={symbols:[{symbol:'TESTUSDT',status:'TRADING',contractType:'PERPETUAL',quoteAsset:'USDT',underlyingType:'COIN'}]};
+ if(url.includes('exchangeInfo'))data={symbols:(process.env.TEST_MODE==='restore'?['TESTUSDT','OTHERUSDT']:['TESTUSDT']).map(symbol=>({symbol,status:'TRADING',contractType:'PERPETUAL',quoteAsset:'USDT',underlyingType:'COIN'}))};
  else if(url.endsWith('/time'))data={serverTime:now};else if(url.includes('/klines'))data=b;
  else if(url.includes('bookTicker'))data={bidPrice:'100.29',askPrice:'100.3'};
  else if(url.includes('generateContent')){if(process.env.TEST_MODE==='outage')return new Response('',{status:429});data={candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({approve:process.env.TEST_MODE!=='reject',reason:'รูปแบบทดลอง',confidence:process.env.TEST_MODE==='restore'?'high':'medium'})}]}}]};}
@@ -28,7 +28,7 @@ try{
   if(mode==='approve'||mode==='uncertain'||mode==='restore'){
    assert.equal(rows.length,1);if(mode==='restore'){assert.equal(rows[0].status,'watch_sent');assert.equal(rows[0].aiAssessment,'high');assert.ok(rows[0].sentAt);}else{assert.equal(rows[0].status,'watch_observed');assert.ok(rows[0].observedAt);assert.equal(rows[0].sentAt,undefined);}
    const repeat=spawnSync(process.execPath,args,{env,encoding:'utf8',timeout:20000});assert.equal(repeat.status,0,repeat.stderr);
-   const again=JSON.parse(await readFile(join(stateDir,'state.json'),'utf8'));assert.equal(again.aiCount,1,'Sent/uncertain alert must not be sent or reviewed again');
+   const again=JSON.parse(await readFile(join(stateDir,'state.json'),'utf8'));assert.equal(again.aiCount,mode==='restore'?2:1,'A new candidate may be observed during cooldown, never re-review the same candidate');if(mode==='restore')assert.equal(Object.values(again.journal).filter(r=>r.status==='watch_sent').length,1,'Global quiet period prevents a second different coin notification');
   }else assert.equal(rows.length,0,'Rejected/unavailable AI must not send a watch');
  }
  console.log('Early watch integration passed: silent approved observations, rejected/outage/dedup, no fake delivery');
