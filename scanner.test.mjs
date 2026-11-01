@@ -45,7 +45,7 @@ try{
     assert.equal(signals,scenario==='manyApproved'?3:['approved','deliveryFail'].includes(scenario)?2:0);if(scenario==='deliveryFail'){const j=Object.values(saved.journal)[0];assert.equal(j.status,'delivery_unknown');assert.ok(saved.sent[j.id]);assert.equal(saved.lastResult.sent,0);}
     if(scenario==='approved'){const records=Object.values(saved.journal);assert.equal(records.length,2);assert.equal(records[0].status,'sent');assert.equal(records[0].messageId,123);assert.ok(records[0].sentAt);assert.equal(records[0].entry,100.5);assert.equal(records[0].shadow.affectsLiveSelection,false);}
     if(scenario==='manyApproved'){const r=Object.values(saved.journal);assert.equal(r.length,3);assert.deepEqual(r.map(x=>x.selection.rank),[1,2,3]);assert.ok(r.every(x=>x.selection.shortlistCount===5));}
-    const expectedCalls=['stale','noTrigger','lowQuality'].includes(scenario)?0:scenario==='unavailable'?1:['binance','manyApproved'].includes(scenario)?3:2;
+    const expectedCalls=['stale','noTrigger'].includes(scenario)?0:scenario==='unavailable'?1:['binance','manyApproved'].includes(scenario)?3:2;
     assert.equal(aiCalls,expectedCalls);
     assert.equal(saved.count,(scenario==='over50'?50:49)+expectedCalls,'no application daily cap; attempts still recorded');
     assert.equal(messages,scenario==='manyApproved'?4:scenario==='quiet'?0:['approved','deliveryFail'].includes(scenario)?3:1,'signals plus throttled heartbeat only');

@@ -25,5 +25,6 @@ assert.equal(prospectiveEarlyMetrics([{...prospect,sentAt:new Date(2000).toISOSt
 const ranked=shortlistConfirmed(Array.from({length:9},(_,i)=>({symbol:'C'+i,selectionQuality:{total:81+i},volumeRatio:3})));
 assert.deepEqual(ranked.map(c=>c.symbol),['C8','C7','C6','C5','C4']);
 assert.equal(notificationPolicy.maxSignalsPerRound,3);assert.equal(notificationPolicy.earlyWatchNotifications,false);
-assert.equal(shortlistConfirmed([{symbol:'LOW',selectionQuality:{total:84}}]).length,0,'Never fill missing ranks with weaker candidates');
+assert.equal(shortlistConfirmed([{symbol:'VALID',selectionQuality:{total:84}}]).length,1,'Unvalidated absolute cutoff must not veto a confirmed setup');
+assert.equal(shortlistConfirmed([{symbol:'INVALID',selectionQuality:{total:NaN}}]).length,0,'Missing quality is still rejected');
 console.log('Early-base causal detector checks passed');
