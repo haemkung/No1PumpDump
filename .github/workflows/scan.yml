@@ -5,11 +5,11 @@ on:
   workflow_dispatch:
     inputs:
       test_telegram:
-        description: Send a connection test instead of scanning
+        description: Test Groq and Telegram from GitHub without scanning
         type: boolean
         default: false
   push:
-    paths: ['scanner.mjs', 'market-data.mjs', 'sniper.mjs', 'signal-score.mjs', 'ml*.mjs', 'strategy.mjs', 'test.mjs', 'scanner.test.mjs', '.github/workflows/scan.yml']
+    paths: ['*.mjs', '.github/workflows/scan.yml']
 permissions:
   contents: read
 concurrency:
@@ -34,7 +34,7 @@ jobs:
           TEST_TELEGRAM: ${{ inputs.test_telegram }}
         run: |
           if [ "$TEST_TELEGRAM" = "true" ]; then
-            node scanner.mjs --test-telegram
+            node test-groq-cloud.mjs
           else
             node scanner.mjs
           fi
