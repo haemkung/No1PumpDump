@@ -26,9 +26,9 @@ try{
   const result=spawnSync(process.execPath,args,{env,encoding:'utf8',timeout:20000});assert.equal(result.status,0,result.stderr);
   const state=JSON.parse(await readFile(join(stateDir,'state.json'),'utf8')),rows=Object.values(state.journal);
   if(mode==='approve'||mode==='uncertain'||mode==='restore'){
-   assert.equal(rows.length,1);if(mode==='restore'){assert.equal(rows[0].status,'watch_sent');assert.equal(rows[0].aiAssessment,'high');assert.ok(rows[0].sentAt);}else{assert.equal(rows[0].status,'watch_observed');assert.ok(rows[0].observedAt);assert.equal(rows[0].sentAt,undefined);}
+   assert.equal(rows.length,mode==='restore'?2:1);assert.ok(rows.every(r=>r.status==='watch_observed'&&r.observedAt&&!r.sentAt),'Even high-rated micro setups remain silent in the 15-minute profile');
    const repeat=spawnSync(process.execPath,args,{env,encoding:'utf8',timeout:20000});assert.equal(repeat.status,0,repeat.stderr);
-   const again=JSON.parse(await readFile(join(stateDir,'state.json'),'utf8'));assert.equal(again.aiCount,mode==='restore'?2:1,'A new candidate may be observed during cooldown, never re-review the same candidate');if(mode==='restore')assert.equal(Object.values(again.journal).filter(r=>r.status==='watch_sent').length,1,'Global quiet period prevents a second different coin notification');
+   const again=JSON.parse(await readFile(join(stateDir,'state.json'),'utf8'));assert.equal(again.aiCount,mode==='restore'?2:1,'A new candidate may be observed during cooldown, never re-review the same candidate');if(mode==='restore')assert.equal(Object.values(again.journal).filter(r=>r.status==='watch_sent').length,0,'Global quiet period prevents a second different coin notification');
   }else assert.equal(rows.length,0,'Rejected/unavailable AI must not send a watch');
  }
  console.log('Early watch integration passed: silent approved observations, rejected/outage/dedup, no fake delivery');

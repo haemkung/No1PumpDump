@@ -24,7 +24,7 @@ assert.equal(prospectiveEarlyMetrics([{...prospect,deliveryAttemptAt:new Date(15
 assert.equal(prospectiveEarlyMetrics([{...prospect,sentAt:new Date(2000).toISOString()}]).n,1,'Telegram second-resolution timestamp handled');
 const ranked=shortlistConfirmed(Array.from({length:9},(_,i)=>({symbol:'C'+i,selectionQuality:{total:81+i},volumeRatio:3})));
 assert.deepEqual(ranked.map(c=>c.symbol),['C8','C7','C6','C5','C4']);
-assert.equal(notificationPolicy.maxSignalsPerRound,3);assert.equal(notificationPolicy.earlyWatchNotifications,true);assert.equal(notificationPolicy.earlyHighOnly,true);
+assert.equal(notificationPolicy.maxSignalsPerRound,1);assert.equal(notificationPolicy.earlyWatchNotifications,false);assert.equal(notificationPolicy.earlyHighOnly,true);
 assert.equal(shortlistConfirmed([{symbol:'VALID',selectionQuality:{total:84}}]).length,1,'Unvalidated absolute cutoff must not veto a confirmed setup');
 assert.equal(shortlistConfirmed([{symbol:'INVALID',selectionQuality:{total:NaN}}]).length,0,'Missing quality is still rejected');
 const lastAttempt=Date.parse('2026-11-01T00:00:00Z');

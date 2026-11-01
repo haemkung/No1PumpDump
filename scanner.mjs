@@ -112,7 +112,7 @@ async function run(){
     if(check?.approve!==false)throw new Error('AI readiness check failed');
     state.aiVerified=true;await save();console.log('Cloud AI review verified; empty setup rejected.');
   }
-  let sent=0;
+  let sent=0,deliveryAttempts=0;
   const targets=rankTargets(candidates,board),checked=new Set(),confirmed=new Set();
   stats.watchedTargets=targets.length;stats.rankRejected=candidates.length-targets.length;stats.minuteConfirmed=0;
   state.watchlist=targets.map(s=>({symbol:s.symbol,side:s.side,relativeRank:s.relativeRank,return30m:s.return30m,candleTime:s.time,status:'watching'}));await save();
@@ -133,7 +133,7 @@ async function run(){
   }
   const shortlist=shortlistConfirmed(ready);
   for(const s of shortlist){
-    if(sent>=notificationPolicy.maxSignalsPerRound)break;
+    if(deliveryAttempts>=notificationPolicy.maxSignalsPerRound)break;
     if(Date.now()>=deadline-15000||Date.now()<Date.parse(state.aiBackoffUntil||0))break;
     if(state.sent?.[`${provider}-${s.symbol}-${s.side}-${s.time}`])continue;
     if(Date.now()-s.end>freshMs){stats.stale++;continue;}
@@ -175,16 +175,16 @@ async function run(){
       if(mlModel){try{const rawScore=predict(mlModel,featureVector(record));if(Number.isFinite(rawScore))record.mlExperimental={modelVersion:mlModel.version,trainedAt:mlModel.trainedAt,trainingCount:mlModel.trainingCount,rawScore,calibrated:false,mode:'shadow',affectsLiveSelection:false};}catch{}}
       if(mlHistoricalModel){try{const rawScore=predict(mlHistoricalModel,featureVector(record));if(Number.isFinite(rawScore))record.mlHistoricalExperimental={modelVersion:mlHistoricalModel.version,trainedAt:mlHistoricalModel.trainedAt,trainingCount:mlHistoricalModel.trainingCount,rawScore,calibrated:false,mode:'shadow',affectsLiveSelection:false};}catch{}}
       if(mlReactionModel){try{const rawScore=predict(mlReactionModel,featureVector(record));if(Number.isFinite(rawScore))record.mlReactionExperimental={modelVersion:mlReactionModel.version,trainedAt:mlReactionModel.trainedAt,trainingCount:mlReactionModel.trainingCount,rawScore,calibrated:false,mode:'shadow',affectsLiveSelection:false};}catch{}}
-      state.journal[id]=record;await save();
+      state.journal[id]=record;await save();deliveryAttempts++;
       try{
-        const receipt=await telegram(`สัญญาณทดลอง ${s.symbol} ${s.side}\nอันดับผ่านเกณฑ์ในรอบ ${record.selection.rank} | คัดจาก ${record.selection.shortlistCount} ตัวในรายชื่อสูงสุด Top 5 | ส่งสูงสุด 3 ตัว\nโหมด Sniper: บริบท 15 นาที + ยืนยัน 1 นาที\nโมเมนตัม 30 นาทีอยู่กลุ่ม 10% แรงสุดตามฝั่งในตลาดที่ตรวจ (ไม่ใช่การทำนายอันดับอนาคต)\nคะแนนความมั่นใจตามเกณฑ์ ${quality.total}/100\nคะแนนคุณภาพสัญญาณ ไม่ใช่เปอร์เซ็นต์โอกาสชนะ\nแหล่งข้อมูล: ${market.label}\nกราฟ 15 นาที | แท่งปิด ${new Date(s.end).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nตรวจยืนยัน ${new Date().toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nราคาอ้างอิง ${entry}\nStop ${s.stop}\nเป้าแรก 2R ${target}\nแผนต่อเนื่อง 3R/4R ${record.runnerTargets.join(" / ")} หากทิศทางยังยืนยัน ไม่ใช่เป้ารับประกัน\nประเมินแรงตามฝั่งใน 5 นาที ไม่ได้บังคับจบไม้ใน 5 นาที\nเหตุผล: ทะลุกรอบพร้อม Volume แล้วทดสอบกลับ\nAI (${result.model}): ${result.reason}\nหมดอายุเมื่อปิดแท่งถัดไปหรือแตะ Stop ห้ามไล่ราคา ตรวจราคาในแอปก่อนเข้า\nระบบทดลอง ยังไม่พิสูจน์อัตราชนะ ไม่ได้ส่งคำสั่งซื้อขาย`);
+        const receipt=await telegram(`สัญญาณทดลอง ${s.symbol} ${s.side}\nอันดับผ่านเกณฑ์ในรอบ ${record.selection.rank} | คัดจาก ${record.selection.shortlistCount} ตัวในรายชื่อสูงสุด Top 5 | ส่งสูงสุด ${notificationPolicy.maxSignalsPerRound} ตัว\nโหมด Sniper: บริบท 15 นาที + ยืนยัน 1 นาที\nโมเมนตัม 30 นาทีอยู่กลุ่ม 10% แรงสุดตามฝั่งในตลาดที่ตรวจ (ไม่ใช่การทำนายอันดับอนาคต)\nคะแนนความมั่นใจตามเกณฑ์ ${quality.total}/100\nคะแนนคุณภาพสัญญาณ ไม่ใช่เปอร์เซ็นต์โอกาสชนะ\nแหล่งข้อมูล: ${market.label}\nกราฟ 15 นาที | แท่งปิด ${new Date(s.end).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nตรวจยืนยัน ${new Date().toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nราคาอ้างอิง ${entry}\nStop ${s.stop}\nเป้าแรก 2R ${target}\nแผนต่อเนื่อง 3R/4R ${record.runnerTargets.join(" / ")} หากทิศทางยังยืนยัน ไม่ใช่เป้ารับประกัน\nประเมินแรงตามฝั่งใน 5 นาที ไม่ได้บังคับจบไม้ใน 5 นาที\nเหตุผล: ทะลุกรอบพร้อม Volume แล้วทดสอบกลับ\nAI (${result.model}): ${result.reason}\nหมดอายุเมื่อปิดแท่งถัดไปหรือแตะ Stop ห้ามไล่ราคา ตรวจราคาในแอปก่อนเข้า\nระบบทดลอง ยังไม่พิสูจน์อัตราชนะ ไม่ได้ส่งคำสั่งซื้อขาย`);
         record.status='sent';record.messageId=receipt?.message_id??null;record.sentAt=receipt?.date?new Date(receipt.date*1000).toISOString():null;sent++;
       }catch{record.status='delivery_unknown';throw Error('Signal delivery uncertain');}
       finally{await save();}
     }catch{failed++;}
   }
-  if(sent<notificationPolicy.maxSignalsPerRound&&Date.now()<watchUntil&&targets.some(s=>!state.sent?.[`${provider}-${s.symbol}-${s.side}-${s.time}`])&&Date.now()>=Date.parse(state.aiBackoffUntil||0))await new Promise(resolve=>setTimeout(resolve,10000));
-  }while(sent<notificationPolicy.maxSignalsPerRound&&Date.now()<watchUntil&&targets.some(s=>!state.sent?.[`${provider}-${s.symbol}-${s.side}-${s.time}`])&&Date.now()>=Date.parse(state.aiBackoffUntil||0));
+  if(deliveryAttempts<notificationPolicy.maxSignalsPerRound&&Date.now()<watchUntil&&targets.some(s=>!state.sent?.[`${provider}-${s.symbol}-${s.side}-${s.time}`])&&Date.now()>=Date.parse(state.aiBackoffUntil||0))await new Promise(resolve=>setTimeout(resolve,10000));
+  }while(deliveryAttempts<notificationPolicy.maxSignalsPerRound&&Date.now()<watchUntil&&targets.some(s=>!state.sent?.[`${provider}-${s.symbol}-${s.side}-${s.time}`])&&Date.now()>=Date.parse(state.aiBackoffUntil||0));
   state.watchlist=state.watchlist.map(w=>({...w,status:state.sent?.[`${provider}-${w.symbol}-${w.side}-${w.candleTime}`]?'sent':'watch_window_ended'}));
   state.lastRun=new Date().toISOString();state.scanned=scanned;state.failed=failed;state.error=failed||stats.aiUnavailable?'partial_failure':null;state.provider=provider;state.lastRunner=process.env.MONITOR_ORIGIN==='local'?'local':'github';
   state.lastResult={totalMarkets:universe.totalMarkets,attempted:symbols.length,scope:universe.scope,scanSeconds:Math.round((Date.now()-scanStarted)/100)/10,sent,...stats,aiBudgetUsed:state.count};await save();

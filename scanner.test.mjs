@@ -42,14 +42,14 @@ try{
     if(scenario==='held'||scenario==='late'){assert.equal(saved,undefined,'losing or late runner must not overwrite shared quota');assert.equal(aiCalls,0);assert.equal(messages,0);assert.equal(marketReads,0);continue;}
     assert.equal(saved.scanned,scenario==='manyApproved'?8:scenario==='binance'?3:2,'Binance includes thin markets; Kraken backup retains its threshold');
     if(scenario==='binance'){assert.equal(saved.provider,'binance-futures');assert.equal(saved.lastRunner,'local');assert.equal(saved.lastResult.attempted,3);}
-    assert.equal(saved.lastResult.sent,scenario==='manyApproved'?3:['approved','groqApproved'].includes(scenario)?2:0,'only approved fresh setup may become a signal; maximum three');
-    assert.equal(signals,scenario==='manyApproved'?3:['approved','deliveryFail','groqApproved'].includes(scenario)?2:0);if(scenario==='deliveryFail'){const j=Object.values(saved.journal)[0];assert.equal(j.status,'delivery_unknown');assert.ok(saved.sent[j.id]);assert.equal(saved.lastResult.sent,0);}
-    if(['approved','groqApproved'].includes(scenario)){const records=Object.values(saved.journal);assert.equal(records.length,2);assert.equal(records[0].status,'sent');assert.equal(records[0].messageId,123);assert.ok(records[0].sentAt);assert.equal(records[0].entry,100.5);assert.equal(records[0].shadow.affectsLiveSelection,false);}
-    if(scenario==='manyApproved'){const r=Object.values(saved.journal);assert.equal(r.length,3);assert.deepEqual(r.map(x=>x.selection.rank),[1,2,3]);assert.ok(r.every(x=>x.selection.shortlistCount===5));}
-    const expectedCalls=['stale','noTrigger'].includes(scenario)?0:scenario==='unavailable'?2:['binance','manyApproved'].includes(scenario)?3:2;
+    assert.equal(saved.lastResult.sent,['manyApproved','approved','groqApproved'].includes(scenario)?1:0,'only approved fresh setup may become a signal; maximum one attempt');
+    assert.equal(signals,['manyApproved','approved','deliveryFail','groqApproved'].includes(scenario)?1:0);if(scenario==='deliveryFail'){const j=Object.values(saved.journal)[0];assert.equal(j.status,'delivery_unknown');assert.ok(saved.sent[j.id]);assert.equal(saved.lastResult.sent,0);}
+    if(['approved','groqApproved'].includes(scenario)){const records=Object.values(saved.journal);assert.equal(records.length,1);assert.equal(records[0].status,'sent');assert.equal(records[0].messageId,123);assert.ok(records[0].sentAt);assert.equal(records[0].entry,100.5);assert.equal(records[0].shadow.affectsLiveSelection,false);}
+    if(scenario==='manyApproved'){const r=Object.values(saved.journal);assert.equal(r.length,1);assert.deepEqual(r.map(x=>x.selection.rank),[1]);assert.ok(r.every(x=>x.selection.shortlistCount===5));}
+    const expectedCalls=['stale','noTrigger'].includes(scenario)?0:scenario==='unavailable'?2:scenario==='binance'?3:['manyApproved','approved','deliveryFail','groqApproved'].includes(scenario)?1:2;
     assert.equal(aiCalls,expectedCalls);
     assert.equal(saved.count,(scenario==='over50'?50:49)+expectedCalls,'no application daily cap; attempts still recorded');
-    assert.equal(messages,scenario==='manyApproved'?4:scenario==='quiet'?0:['approved','deliveryFail','groqApproved'].includes(scenario)?3:1,'signals plus throttled heartbeat only');
+    assert.equal(messages,scenario==='quiet'?0:['manyApproved','approved','deliveryFail','groqApproved'].includes(scenario)?2:1,'signals plus throttled heartbeat only');
     if(scenario==='stale')assert.equal(saved.lastResult.stale,2);
     if(scenario==='rejected')assert.equal(saved.lastResult.aiRejected,2);
     if(scenario==='unavailable'){assert.equal(saved.lastResult.aiUnavailable,1);assert.equal(saved.error,'partial_failure');}
