@@ -1,0 +1,7 @@
+{
+  "id": "thai-day-2026-11-01-no-confirmed-alert",
+  "armedAt": "2026-11-01T05:23:39.000Z",
+  "deadline": "2026-11-01T17:00:00.000Z",
+  "restore": "early_watch_notifications",
+  "enabled": true
+}

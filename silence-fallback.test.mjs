@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {silenceDecision} from './silence-fallback.mjs';
+const p={enabled:true,armedAt:'2026-11-01T05:23:39Z',deadline:'2026-11-01T17:00:00Z'},end=Date.parse(p.deadline);
+assert.equal(silenceDecision(p,{},end-1),'waiting');
+assert.equal(silenceDecision(p,{},end),'restore_early');
+assert.equal(silenceDecision(p,{a:{status:'sent',sentAt:'2026-11-01T10:00:00Z'}},end),'keep_confirmed');
+assert.equal(silenceDecision(p,{a:{status:'sent',sentAt:'2026-11-01T04:00:00Z'}},end),'restore_early','Old alerts before user instruction do not satisfy the wait');
+assert.equal(silenceDecision(p,{a:{status:'sent',sentAt:'2026-11-01T17:00:01Z'}},end+2000),'restore_early','Next-day alert does not change the completed day');
+assert.equal(silenceDecision(p,null,end),'defer','Unavailable history is not proof of silence');
+assert.equal(silenceDecision(p,{a:{status:'watch_observed',observedAt:'2026-11-01T10:00:00Z'}},end),'restore_early','Silent observations do not count as delivered confirmed alerts');
+console.log('Silence fallback passed: Thai midnight, successful delivery window, old/new alerts and unavailable history');

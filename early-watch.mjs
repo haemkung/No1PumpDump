@@ -4,6 +4,7 @@ import {createMarketData} from './market-data.mjs';
 import {earlyBase,earlyScore} from './early-base.mjs';
 import {earlyForecast} from './early-learning.mjs';
 import {notificationPolicy} from './notification-policy.mjs';
+import {silenceDecision} from './silence-fallback.mjs';
 import {pathToFileURL} from 'node:url';
 import {resolve,sep} from 'node:path';
 const token=process.env.TELEGRAM_BOT_TOKEN,chat=process.env.TELEGRAM_CHAT_ID,key=process.env.GEMINI_API_KEY;
@@ -16,6 +17,29 @@ let learningModel=null;try{learningModel=JSON.parse(await readFile(new URL('./.m
 async function save(){const serialized=JSON.stringify(state);await writeFile(new URL('state.backup.json',dir),lastSaved);await writeFile(new URL('state.json',dir),serialized);lastSaved=serialized;}
 async function json(url,options={}){if(Date.now()>=deadline)throw Error('Watch deadline');const r=await fetch(url,{...options,signal:AbortSignal.timeout(Math.max(1,Math.min(20000,deadline-Date.now())))});if(!r.ok)throw Error('Service HTTP '+r.status);return r.json();}
 try{
+  let plan=null;try{plan=JSON.parse(await readFile(new URL('./silence-fallback-plan.json',import.meta.url),'utf8'));}catch{}
+  if(plan?.enabled&&state.silenceFallback?.planId!==plan.id){
+    let decision=silenceDecision(plan,null,Date.now());
+    if(decision==='defer'&&Date.now()>=Date.parse(plan.deadline)){
+      try{
+        const c=await json('https://api.telegram.org/bot'+token+'/getChat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:chat})});
+        const pinned=c.result?.pinned_message;
+        if(pinned?.document?.file_name!=='no1-monitor-state.json')throw Error('Missing private state');
+        const f=await json('https://api.telegram.org/bot'+token+'/getFile?file_id='+encodeURIComponent(pinned.document.file_id));
+        const privateState=await json('https://api.telegram.org/file/bot'+token+'/'+f.result.file_path);
+        decision=silenceDecision(plan,privateState.journal,Date.now());
+      }catch{decision='defer';}
+    }
+    if(decision==='restore_early'||decision==='keep_confirmed'){
+      state.silenceFallback={planId:plan.id,decision,decidedAt:new Date().toISOString()};await save();
+      if(decision==='restore_early'){
+        state.silenceFallback.noticeAttemptAt=new Date().toISOString();await save();
+        try{await json('https://api.telegram.org/bot'+token+'/sendMessage',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:chat,text:'ครบกำหนดสิ้นวันไทยแล้ว ไม่มีสัญญาณยืนยันที่บันทึกว่าส่งสำเร็จตั้งแต่ตั้งเงื่อนไข จึงกลับมาเปิดข้อความเฝ้าต้นฐานแบบเดิมอัตโนมัติ การเรียนรู้ยังทำต่อ ข้อความต้นฐานยังเป็นการเฝ้าดู ไม่ใช่สัญญาณ Sniper ยืนยัน'})});}catch{}
+      }
+    }
+    state.silenceFallbackCheck={planId:plan.id,decision,checkedAt:new Date().toISOString()};await save();
+  }
+  const earlyNotifications=notificationPolicy.earlyWatchNotifications||(plan?.enabled===true&&plan.id===state.silenceFallback?.planId&&state.silenceFallback?.decision==='restore_early');
   const market=createMarketData('binance-futures',json),u=await market.universe(),candidates=[];let scanned=0,failed=0,sent=0;
   for(let i=0;i<u.symbols.length;i+=6)await Promise.all(u.symbols.slice(i,i+6).map(async symbol=>{try{const bars=await market.bars(symbol,u.serverTime,'1m');if(!bars.length)throw Error('No data');scanned++;const s=earlyBase(bars,Date.now());if(s)candidates.push({symbol,...s,candles:bars.slice(-25)});}catch{failed++;}}));
   for(const s of candidates.sort((a,b)=>earlyScore(b)-earlyScore(a)).slice(0,3)){
@@ -39,9 +63,9 @@ try{
     record.reviewModel=review.model;
     record.mlExperimental=earlyForecast(learningModel,record,Date.now());
     record.deliveryAttemptAt=new Date().toISOString();
-    if(!notificationPolicy.earlyWatchNotifications){record.status='watch_observed';record.observedAt=record.deliveryAttemptAt;delete record.deliveryAttemptAt;}
+    if(!earlyNotifications){record.status='watch_observed';record.observedAt=record.deliveryAttemptAt;delete record.deliveryAttemptAt;}
     state.journal[id]=record;state.sent[s.symbol+'-'+s.side]=new Date().toISOString();await save();
-    if(!notificationPolicy.earlyWatchNotifications)continue;
+    if(!earlyNotifications)continue;
     const text=`เฝ้าต้นฐาน ${s.symbol} ${s.side}\nระยะเริ่มต้น — ยังไม่ใช่สัญญาณ Sniper ยืนยัน\nคะแนนรูปแบบต้นฐาน ${record.score}/100 ไม่ใช่โอกาสชนะ\nBinance USDT Futures | แท่ง 1 นาทีปิด ${new Date(s.end).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nราคาอ้างอิงขณะตรวจ ${price}\nกรอบฐานเดิม ${s.baseLow} – ${s.baseHigh}\nระดับเสียรูปแบบ ${s.stop}\nเหตุผล: กวาดขอบฐานแล้วดึงกลับ พร้อม Volume ${s.volumeRatio.toFixed(2)} เท่า\nGemini: ${review.reason}\nเป็นจุดเริ่มจับตา ไม่ใช่การรับรองจุดต่ำสุด/สูงสุด อาจกลับผิดทางได้ ไม่ส่งคำสั่งซื้อขาย`;
     try{const result=await json('https://api.telegram.org/bot'+token+'/sendMessage',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:chat,text})});if(!result.ok)throw Error('Delivery uncertain');record.status='watch_sent';record.sentAt=new Date(result.result.date*1000).toISOString();record.messageId=result.result.message_id;sent++;}catch{record.status='delivery_unknown';}await save();
   }
