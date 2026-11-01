@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {score85Report} from './score-validation.mjs';
+const now=Date.parse('2026-11-02T00:00:00Z'),t=Date.parse('2026-10-30T00:00:00Z');
+const row=(score,kind,i)=>({sentAt:new Date(t+i*60000).toISOString(),quality:{total:score},label:{kind}});
+const rows=[row(84,'TP',0),row(85,'SL',1),row(90,'no_touch_4h',2),row(null,'TP',3),{...row(99,'TP',4),sentAt:new Date(now-60000).toISOString()}];
+const r=score85Report(rows,now);
+assert.equal(r.scoredMatured,3);assert.equal(r.excluded,2,'Exclude missing scores and immature outcomes');
+assert.equal(r.all.scoreAtLeast85.n,2);assert.equal(r.all.scoreAtLeast85.TP,0);assert.equal(r.all.scoreAtLeast85.SL,1);assert.equal(r.all.scoreAtLeast85.no_touch,1);
+assert.equal(r.all.withoutAbsoluteCutoff.TP,1);assert.equal(r.all.withoutAbsoluteCutoff.touchedBarrierGrossR,1,'Untouched exits must not be counted as -1R');
+assert.equal(r.prospective.withoutAbsoluteCutoff.n,0,'Inspected historical data must not become prospective proof');
+assert.equal(r.affectsLiveSelection,false);
+console.log('Score validation passed: same cohort, strict cutoff, no imputed scores, maturity and prospective separation');

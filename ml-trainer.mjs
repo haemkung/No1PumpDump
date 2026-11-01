@@ -3,6 +3,7 @@ import {createHash} from 'node:crypto';
 import {featureVector,fit,evaluate} from './ml-model.mjs';
 import {evaluateMaturedSignal} from './ml-outcomes.mjs';
 import {prospectiveEarlyMetrics} from './early-learning.mjs';
+import {score85Report} from './score-validation.mjs';
 const dir=new URL('./.ml/',import.meta.url);await mkdir(dir,{recursive:true});
 async function read(name,fallback){try{return JSON.parse(await readFile(new URL(name,dir),'utf8'));}catch{return fallback;}}
 async function save(name,data){const url=new URL(name,dir),tmp=new URL(name+'.tmp',dir);await writeFile(tmp,JSON.stringify(data,null,2));await rename(tmp,url);}
@@ -36,6 +37,7 @@ try{
     try{const risk=Math.abs(r.entry-r.stop),reactionTarget=r.side==='LONG'?r.entry+.5*risk:r.entry-.5*risk;r.reaction5m={...await evaluateMaturedSignal({...r,target:reactionTarget,evaluationHorizonMs:300000},json),thresholdR:.5,windowMs:300000};}catch{failed++;}
   }
   await save('records.json',records);
+  await save('score85-validation.json',score85Report(Object.values(records)));
   // Early watches have a different target and must never enter the entry-signal cohort.
   try{
     const earlyState=JSON.parse(await readFile(new URL('./.early/state.json',import.meta.url),'utf8'));
