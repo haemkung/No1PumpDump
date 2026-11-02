@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {runnerContext,runnerAssessment} from './runner-assessment.mjs';
+const bars=Array.from({length:40},(_,i)=>({high:101+i,low:99+i,close:100+i,volume:100+i}));
+const long=runnerContext(bars,'LONG',139,137),short=runnerContext(bars,'SHORT',139,141);
+assert.equal(long.trendAligned,true);assert.ok(long.ema21SlopeOneHour>0);assert.equal(short.trendAligned,false);
+assert.equal(runnerAssessment({runnerPotential:'supported',runnerReason:'แนวโน้มสอดคล้อง'},long).supported,true);
+assert.equal(runnerAssessment({runnerPotential:'supported',runnerReason:'fixture'},short).potential,'unclear','Do not promote a model claim contradicted by observed trend');
+assert.equal(runnerAssessment({},long).supported,false,'Missing evidence must not create a runner claim');
+assert.equal(runnerContext(bars.slice(0,10),'LONG',110,109).available,false);
+console.log('Runner assessment passed: directional evidence, missing context and contradictory AI claims');

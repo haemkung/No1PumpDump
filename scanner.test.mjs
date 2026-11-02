@@ -11,6 +11,7 @@ try{
     const now=Date.now(), end=now-(scenario==='stale'?240000:60000);
     const candles=Array.from({length:20},(_,i)=>({time:end-899999-(21-i)*900000,high:100,low:98,close:99,volume:100}));
     candles.push({time:end-899999-900000,high:102,low:99,close:101,volume:scenario==='lowQuality'?160:300},{time:end-899999,high:101,low:99.8,close:100.5,volume:100});
+    if(scenario==='approved'){const oldest=candles[0].time;candles.unshift(...Array.from({length:18},(_,i)=>({time:oldest-(18-i)*900000,high:98,low:96,close:97,volume:100})));}
     const state={day:new Date(now+7*3600000).toISOString().slice(0,10),quotaNoticeDay:new Date(now+7*3600000).toISOString().slice(0,10),count:scenario==='over50'?50:49,sent:{},aiVerified:true,cloudStarted:true,lastRunner:'github',provider:'kraken-futures',lastRun:new Date(now-4*3600000).toISOString(),...(scenario==='quiet'?{lastHeartbeat:new Date(now).toISOString()}:{} )};
 
     if(['cloudThenLocal','closedSlotCloud','cloudHadAttempt'].includes(scenario))state.completedSlot={slot:Math.floor(now/900000),provider:'kraken-futures',attempts:scenario==='cloudHadAttempt'?1:0};
@@ -36,7 +37,7 @@ try{
         {symbol:'PF_THINUSD',tag:'perpetual',volumeQuote:500000,bid:100.48,ask:100.5}]});}
       if(url.includes('/api/charts/'))return reply({candles:url.endsWith('/1m')?minute:candles});
       if(url.includes('api.groq.com')){assert.equal(scenario,'groqApproved');aiCalls++;return reply({choices:[{finish_reason:'stop',message:{content:JSON.stringify({approve:true,reason:'test Groq review'})}}]});}
-      if(url.includes('generativelanguage.googleapis.com')){aiCalls++;if(scenario==='unavailable')return reply({},429);return reply({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({approve:['approved','deliveryFail','manyApproved','groqApproved'].includes(scenario),reason:'test review'})}]}}]});}
+      if(url.includes('generativelanguage.googleapis.com')){aiCalls++;if(scenario==='unavailable')return reply({},429);return reply({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({approve:['approved','deliveryFail','manyApproved','groqApproved'].includes(scenario),reason:'test review',runnerPotential:scenario==='approved'?'supported':'unclear',runnerReason:'แนวโน้มและปริมาณซื้อขายมีข้อมูลรองรับ'})}]}}]});}
       throw Error('Unexpected request in isolated test');
     };
     await import('./scanner.mjs?test='+scenario);
@@ -46,7 +47,7 @@ try{
     if(scenario==='binance'){assert.equal(saved.provider,'binance-futures');assert.equal(saved.lastRunner,'local');assert.equal(saved.lastResult.attempted,3);}
     assert.equal(saved.lastResult.sent,['manyApproved','approved','groqApproved'].includes(scenario)?1:0,'only approved fresh setup may become a signal; maximum one attempt');
     assert.equal(signals,['manyApproved','approved','deliveryFail','groqApproved'].includes(scenario)?1:0);if(scenario==='deliveryFail'){const j=Object.values(saved.journal)[0];assert.equal(j.status,'delivery_unknown');assert.ok(saved.sent[j.id]);assert.equal(saved.lastResult.sent,0);}
-    if(['approved','groqApproved'].includes(scenario)){const records=Object.values(saved.journal);assert.equal(records.length,1);assert.equal(records[0].status,'sent');assert.equal(records[0].messageId,123);assert.ok(records[0].sentAt);assert.equal(records[0].trigger1m,null);assert.equal(records[0].strategyVersion,'original-15m-retest-v6');assert.equal(records[0].entry,100.5);assert.equal(records[0].shadow.affectsLiveSelection,false);}
+    if(['approved','groqApproved'].includes(scenario)){const records=Object.values(saved.journal);assert.equal(records.length,1);assert.equal(records[0].status,'sent');assert.equal(records[0].messageId,123);assert.ok(records[0].sentAt);assert.equal(records[0].trigger1m,null);assert.equal(records[0].strategyVersion,'original-15m-retest-v6');assert.equal(records[0].entry,100.5);assert.equal(records[0].shadow.affectsLiveSelection,false);if(scenario==='approved')assert.equal(records[0].runnerAssessment.supported,true);}
     if(scenario==='manyApproved'){const r=Object.values(saved.journal);assert.equal(r.length,1);assert.deepEqual(r.map(x=>x.selection.rank),[1]);assert.ok(r.every(x=>x.selection.shortlistCount===5));}
     const expectedCalls=scenario==='stale'?0:scenario==='unavailable'?2:['binance','cloudThenLocal'].includes(scenario)?3:['manyApproved','approved','deliveryFail','groqApproved'].includes(scenario)?1:2;
     assert.equal(aiCalls,expectedCalls);

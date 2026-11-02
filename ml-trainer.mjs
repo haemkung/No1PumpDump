@@ -36,7 +36,24 @@ try{
     if(r.reaction5m||Date.now()<Date.parse(r.sentAt)+300000||!featureVector(r))continue;
     try{const risk=Math.abs(r.entry-r.stop),reactionTarget=r.side==='LONG'?r.entry+.5*risk:r.entry-.5*risk;r.reaction5m={...await evaluateMaturedSignal({...r,target:reactionTarget,evaluationHorizonMs:300000},json),thresholdR:.5,windowMs:300000};}catch{failed++;}
   }
+  for(const r of Object.values(records)){
+    if(!r.runnerAssessment||!Array.isArray(r.runnerTargets)||Date.now()<Date.parse(r.sentAt)+14400000||!featureVector(r))continue;
+    r.runnerOutcomes??={};
+    for(const [i,name] of ['3R','4R'].entries())if(!r.runnerOutcomes[name]&&Number.isFinite(r.runnerTargets[i])){
+      try{r.runnerOutcomes[name]=await evaluateMaturedSignal({...r,target:r.runnerTargets[i],evaluationHorizonMs:14400000},json);}catch{failed++;}
+    }
+  }
   await save('records.json',records);
+  for(const name of ['3R','4R']){
+    const rows=Object.values(records).filter(r=>r.runnerOutcomes?.[name]).sort((a,b)=>Date.parse(a.sentAt)-Date.parse(b.sentAt));
+    const samples=rows.map(r=>({id:r.id,time:r.sentAt,x:featureVector(r),y:r.runnerOutcomes[name].target})).filter(s=>s.x);
+    const fingerprint=createHash('sha256').update(JSON.stringify(samples)).digest('hex'),previous=await read('runner-'+name+'-model.json',null);
+    if(samples.length>=20&&new Set(samples.map(s=>s.y)).size===2&&previous?.fingerprint!==fingerprint){
+      const split=Math.max(12,Math.floor(samples.length*.75)),training=samples.slice(0,split),prior=training.reduce((sum,s)=>sum+s.y,0)/training.length;
+      await save('runner-'+name+'-model.json',{...fit(samples),trainedAt:new Date().toISOString(),trainingCount:samples.length,fingerprint,mode:'shadow',affectsLiveSelection:false,calibrated:false,target:name+' before original Stop within four hours of actual delivery; reference-price scenario, not realized trading PnL',retrospectiveTemporalTest:evaluate(fit(training),samples.slice(split),prior)});
+    }
+    await save('runner-'+name+'-runtime.json',{checkedAt:new Date().toISOString(),matured:rows.length,aiSupported:rows.filter(r=>r.runnerAssessment.supported).length,reachedBeforeStop:rows.filter(r=>r.runnerOutcomes[name].kind==='TP').length,mode:'shadow',affectsLiveSelection:false});
+  }
   await save('score85-validation.json',score85Report(Object.values(records)));
   // Early watches have a different target and must never enter the entry-signal cohort.
   try{

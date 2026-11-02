@@ -25,3 +25,7 @@ The existing two-hour learner independently labels delivered early watches for a
 Retrospective LITUSDT case: the 2026-10-31 21:05 Thai minute swept the base to 2.7148; the 21:06 candle closed at 2.7215 and became observable at 21:07. Forward replay with candles restricted to those closed at evaluation found this watch. This is a case study discovered after seeing the chart, not out-of-sample validation, a reconstruction of a live message, or proof the live AI/quote checks would approve it.
 
 Run `node early-base.test.mjs` and `node early-watch.test.mjs` for causal detector checks and isolated approved/rejected/outage/unknown-delivery/dedup tests.
+
+## Conditional runner assessment
+
+Each confirmed alert now includes a separate supported/unclear/weak continuation assessment and reason. The supplied 15-minute evidence includes EMA9/EMA21 alignment, the one-hour change of EMA21, ATR14 extension and recent/baseline volume. A model-supported tag is downgraded when trend data are unavailable or contradictory. This tag does not change entry eligibility, rank or alert count; it is not calibrated win probability or proof of a sustained move. The 3R/4R levels are conditional plans, not promised exits. The private learner separately evaluates 3R and 4R before the original Stop within four hours of actual Telegram delivery. At least 20 mature examples and both classes are needed for separate shadow models; they never alter live selection automatically. These reference-price outcomes do not simulate trailing Stops, fees, funding or executed positions.
