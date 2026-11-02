@@ -25,7 +25,10 @@ const state=await load();
 async function claimSlot(){
   const now=Date.now();
   if(now%900000>=freshMs)return false;
-  const caption='No1 scan-slot '+Math.floor(now/900000);
+  const slot=Math.floor(now/900000),completed=state.completedSlot;
+  const followup=provider==='binance-futures'&&completed?.slot===slot&&completed.provider==='kraken-futures'&&completed.attempts===0;
+  if(completed?.slot===slot&&!followup)return false;
+  const caption='No1 scan-slot '+slot+(followup?' local-followup':'');
   // Telegram atomically rejects a second identical caption edit. Both runners
   // use the same slot value; every state save preserves it until the next slot.
   const r=await fetch(`https://api.telegram.org/bot${token}/editMessageCaption`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:chat,message_id:state.messageId,caption}),signal:AbortSignal.timeout(25000)});
@@ -205,6 +208,9 @@ async function run(){
     state.lastHeartbeat=new Date().toISOString();await save();await telegram(lines.join('\n'));
   }
   if(!state.cloudStarted){await telegram('เปิดตัวเฝ้าตลาดบน GitHub สำเร็จแล้ว ปิดคอมได้ ตัวรันออนไลน์จะตรวจประมาณทุก 15 นาที (อาจล่าช้า) ใช้ข้อมูล Kraken Futures แทน Binance ที่บล็อกเซิร์ฟเวอร์ รายชื่อและราคาอาจต่างกัน ส่งเฉพาะสัญญาณที่ผ่านกฎและ Gemini โดยไม่ตั้งเพดานรายวันในโปรแกรม ไม่รับประกันกำไร');state.cloudStarted=true;await save();}
+  // Publish completion only after all other saves/messages. A local follower may
+  // then safely reuse this state if cloud made no delivery attempt in the slot.
+  state.completedSlot={slot:Math.floor(scanStarted/900000),provider,attempts:deliveryAttempts,completedAt:new Date().toISOString()};await save();
   console.log(JSON.stringify({provider,totalMarkets:universe.totalMarkets,attempted:symbols.length,scanned,sent,failed,...stats,aiUsed:state.count,aiCap:null,scanSeconds:state.lastResult.scanSeconds,complete:true}));
 }
 try{await run();}catch(e){if(ownsSlot){state.lastRun=new Date().toISOString();state.error='service_unavailable';try{await save()}catch{}}const safe=/^Remote service HTTP \d+$/.test(e.message)?e.message:'service unavailable';console.error('Scan failed: '+safe+'. No credentials logged.');process.exitCode=1;}
