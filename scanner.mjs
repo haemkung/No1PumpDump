@@ -3,9 +3,9 @@ import {reviewWithFallback,configuredReviewModels,reviewStatusMessage} from './r
 import {findSignal} from './strategy.mjs';
 import {createMarketData} from './market-data.mjs';
 import {signalScore} from './signal-score.mjs';
-import {readFile} from 'node:fs/promises';
+import {readFile,appendFile,mkdir} from 'node:fs/promises';
 import {featureVector,predict} from './ml-model.mjs';
-import {rankTargets,confirmMinute,triggerStillValid} from './sniper.mjs';
+
 import {notificationPolicy,shortlistConfirmed} from './notification-policy.mjs';
 
 const token=process.env.TELEGRAM_BOT_TOKEN, chat=process.env.TELEGRAM_CHAT_ID, key=process.env.GEMINI_API_KEY;
@@ -113,20 +113,19 @@ async function run(){
     state.aiVerified=true;await save();console.log('Cloud AI review verified; empty setup rejected.');
   }
   let sent=0,deliveryAttempts=0;
-  const targets=rankTargets(candidates,board),checked=new Set(),confirmed=new Set();
-  stats.watchedTargets=targets.length;stats.rankRejected=candidates.length-targets.length;stats.minuteConfirmed=0;
-  state.watchlist=targets.map(s=>({symbol:s.symbol,side:s.side,relativeRank:s.relativeRank,return30m:s.return30m,candleTime:s.time,status:'watching'}));await save();
-  const watchUntil=Math.min(deadline-30000,scanStarted+150000,scanStarted+Math.max(0,Math.min(120000,Number(process.env.MONITOR_WATCH_MS??120000))));
+  const targets=candidates.map(s=>({...s,return30m:board.find(b=>b.symbol===s.symbol)?.return30m??null})),checked=new Set();
+  stats.watchedTargets=targets.length;stats.rankRejected=0;stats.minuteConfirmed=0;stats.fifteenMinuteConfirmed=targets.length;
+  state.watchlist=targets.map(s=>({symbol:s.symbol,side:s.side,return30m:s.return30m,candleTime:s.time,status:'watching'}));await save();
+  const watchUntil=scanStarted; // Original 15m profile: review each closed setup once, no mandatory minute trigger.
   do{
   const ready=[];
   for(const s of targets){
     if(Date.now()>=deadline-15000||Date.now()-s.end>freshMs||state.sent?.[`${provider}-${s.symbol}-${s.side}-${s.time}`])continue;
     try{
-      const bars=await market.bars(s.symbol,Date.now(),'1m'),trigger=confirmMinute(bars,s.side,Date.now());if(!trigger)continue;
-      if(checked.has(s.symbol+'-'+trigger.time))continue;
+      if(checked.has(s.symbol+'-'+s.time))continue;
       const book=await quote(s.symbol),bid=Number(book.bidPrice),ask=Number(book.askPrice),entry=s.side==='LONG'?ask:bid;
       const risk=s.side==='LONG'?entry-s.stop:s.stop-entry;
-      if(!triggerStillValid(trigger,s.side,bid,ask)||!(bid>0&&ask>=bid)||(ask-bid)/bid>.001||Math.abs(entry-s.entry)/s.entry>.003||risk/entry<.003||risk/entry>.03)continue;
+      if(!(bid>0&&ask>=bid)||(ask-bid)/bid>.001||Math.abs(entry-s.entry)/s.entry>.003||risk/entry<.003||risk/entry>.03){stats.quoteRejected++;continue;}
       const selectionQuality=signalScore({volumeRatio:s.volumeRatio,spreadRatio:(ask-bid)/bid,entryDrift:Math.abs(entry-s.entry)/s.entry,ageMs:Date.now()-s.end,approved:true});
       if(selectionQuality)ready.push({...s,selectionQuality});
     }catch{stats.marketDataFailed++;}
@@ -138,14 +137,9 @@ async function run(){
     if(state.sent?.[`${provider}-${s.symbol}-${s.side}-${s.time}`])continue;
     if(Date.now()-s.end>freshMs){stats.stale++;continue;}
     try{
-      const minuteBars=await market.bars(s.symbol,Date.now(),'1m');
-      const trigger=confirmMinute(minuteBars,s.side,Date.now());
-      if(!trigger)continue;
-      const triggerId=s.symbol+'-'+trigger.time;if(checked.has(triggerId))continue;
-      if(!confirmed.has(triggerId)){stats.minuteConfirmed++;confirmed.add(triggerId);}
+      const trigger=null,triggerId=s.symbol+'-'+s.time;if(checked.has(triggerId))continue;
       const book=await quote(s.symbol);
       const bid=Number(book.bidPrice),ask=Number(book.askPrice),entry=s.side==='LONG'?ask:bid;
-      if(!triggerStillValid(trigger,s.side,bid,ask)){stats.quoteRejected++;continue;}
       const risk=s.side==='LONG'?entry-s.stop:s.stop-entry;
       if(!(bid>0&&ask>=bid)|| (ask-bid)/bid>.001||Math.abs(entry-s.entry)/s.entry>.003||risk/entry<.003||risk/entry>.03){stats.quoteRejected++;continue;}
       const target=s.side==='LONG'?entry+2*risk:entry-2*risk;
@@ -153,14 +147,12 @@ async function run(){
       checked.add(triggerId);
       let result;
       const {closeStrength,...reviewSignal}=s;
-      try{result=await review({...reviewSignal,entry,target,trigger1m:trigger,objective:'Fresh one-minute confirmation; seek initial directional follow-through within five minutes, with optional longer runner. Do not promise either.'});}catch(e){stats.aiUnavailable++;failed++;if(e.code==='AI_UNAVAILABLE'||/^Remote service HTTP (429|503)$/.test(e.message)){state.aiBackoffUntil=new Date(Date.now()+60000).toISOString();await save();}continue;}
+      try{result=await review({...reviewSignal,entry,target,trigger1m:trigger,objective:'Closed 15-minute breakout of the preceding 20-bar range with volume and a completed retest, matching the original setup family. Review structure and room for 2R. Do not require a second 1-minute breakout, invent evidence, or promise follow-through.'});}catch(e){stats.aiUnavailable++;failed++;if(e.code==='AI_UNAVAILABLE'||/^Remote service HTTP (429|503)$/.test(e.message)){state.aiBackoffUntil=new Date(Date.now()+60000).toISOString();await save();}continue;}
       if(!result){stats.aiUnavailable++;continue;}
       if(!result.approve){stats.aiRejected++;continue;}
       const latest=await quote(s.symbol),now={serverTime:Date.now()};
       const fb=Number(latest.bidPrice),fa=Number(latest.askPrice),price=s.side==='LONG'?fa:fb;
-      if(!triggerStillValid(trigger,s.side,fb,fa)){stats.quoteRejected++;continue;}
       if(now.serverTime-s.end>freshMs){stats.stale++;continue;}
-      if(Date.now()-trigger.end>75000){stats.stale++;continue;}
       if(!(fb>0&&fa>=fb)||(fa-fb)/fb>.001||Math.abs(price-entry)/entry>.001){stats.quoteRejected++;continue;}
       const quality=signalScore({volumeRatio:s.volumeRatio,spreadRatio:(fa-fb)/fb,entryDrift:Math.abs(price-s.entry)/s.entry,ageMs:Date.now()-s.end,approved:result.approve});
       if(!quality||quality.total<notificationPolicy.minQuality)continue;
@@ -169,7 +161,7 @@ async function run(){
       state.sent??={};state.sent[id]=new Date().toISOString();
       state.journal??={};
       const record={id,provider,symbol:s.symbol,side:s.side,entry,stop:s.stop,target,candleTime:s.time,candleClosedAt:new Date(s.end).toISOString(),verifiedAt:new Date().toISOString(),expiresAt:new Date(s.time+1800000).toISOString(),status:'delivery_pending',quality,features:{volumeRatio:s.volumeRatio,closeStrength:s.closeStrength,spreadRatio:(fa-fb)/fb,entryDrift:Math.abs(price-s.entry)/s.entry},strategyVersion:'breakout-retest-v1',shadow:{version:'close-strength-70-v1',pass:s.closeStrength>=.7,affectsLiveSelection:false}};
-      record.reviewModel=result.model;record.strategyVersion='sniper-runner-v1';record.reactionWindowMs=300000;record.trigger1m=trigger;record.relativeRank=s.relativeRank;
+      record.reviewModel=result.model;record.strategyVersion='original-15m-retest-v6';record.reactionWindowMs=300000;record.trigger1m=trigger;record.relativeRank=null;
       record.selection={policy:notificationPolicy.version,rank:sent+1,shortlistCount:shortlist.length,minQuality:notificationPolicy.minQuality,maxSignals:notificationPolicy.maxSignalsPerRound};
       record.runnerTargets=s.side==='LONG'?[entry+3*risk,entry+4*risk]:[entry-3*risk,entry-4*risk];
       if(mlModel){try{const rawScore=predict(mlModel,featureVector(record));if(Number.isFinite(rawScore))record.mlExperimental={modelVersion:mlModel.version,trainedAt:mlModel.trainedAt,trainingCount:mlModel.trainingCount,rawScore,calibrated:false,mode:'shadow',affectsLiveSelection:false};}catch{}}
@@ -177,7 +169,7 @@ async function run(){
       if(mlReactionModel){try{const rawScore=predict(mlReactionModel,featureVector(record));if(Number.isFinite(rawScore))record.mlReactionExperimental={modelVersion:mlReactionModel.version,trainedAt:mlReactionModel.trainedAt,trainingCount:mlReactionModel.trainingCount,rawScore,calibrated:false,mode:'shadow',affectsLiveSelection:false};}catch{}}
       state.journal[id]=record;await save();deliveryAttempts++;
       try{
-        const receipt=await telegram(`สัญญาณทดลอง ${s.symbol} ${s.side}\nอันดับผ่านเกณฑ์ในรอบ ${record.selection.rank} | คัดจาก ${record.selection.shortlistCount} ตัวในรายชื่อสูงสุด Top 5 | ส่งสูงสุด ${notificationPolicy.maxSignalsPerRound} ตัว\nโหมด Sniper: บริบท 15 นาที + ยืนยัน 1 นาที\nโมเมนตัม 30 นาทีอยู่กลุ่ม 10% แรงสุดตามฝั่งในตลาดที่ตรวจ (ไม่ใช่การทำนายอันดับอนาคต)\nคะแนนความมั่นใจตามเกณฑ์ ${quality.total}/100\nคะแนนคุณภาพสัญญาณ ไม่ใช่เปอร์เซ็นต์โอกาสชนะ\nแหล่งข้อมูล: ${market.label}\nกราฟ 15 นาที | แท่งปิด ${new Date(s.end).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nตรวจยืนยัน ${new Date().toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nราคาอ้างอิง ${entry}\nStop ${s.stop}\nเป้าแรก 2R ${target}\nแผนต่อเนื่อง 3R/4R ${record.runnerTargets.join(" / ")} หากทิศทางยังยืนยัน ไม่ใช่เป้ารับประกัน\nประเมินแรงตามฝั่งใน 5 นาที ไม่ได้บังคับจบไม้ใน 5 นาที\nเหตุผล: ทะลุกรอบพร้อม Volume แล้วทดสอบกลับ\nAI (${result.model}): ${result.reason}\nหมดอายุเมื่อปิดแท่งถัดไปหรือแตะ Stop ห้ามไล่ราคา ตรวจราคาในแอปก่อนเข้า\nระบบทดลอง ยังไม่พิสูจน์อัตราชนะ ไม่ได้ส่งคำสั่งซื้อขาย`);
+        const receipt=await telegram(`สัญญาณทดลอง ${s.symbol} ${s.side}\nอันดับผ่านเกณฑ์ในรอบ ${record.selection.rank} | คัดจาก ${record.selection.shortlistCount} ตัวในรายชื่อสูงสุด Top 5 | ส่งสูงสุด ${notificationPolicy.maxSignalsPerRound} ตัว\nโหมด 15 นาที: เบรกกรอบ 20 แท่ง + ทดสอบกลับ + Volume\nคัดอันดับจากตัวที่ผ่านรูปแบบและการตรวจราคา ไม่ใช่การทำนายอันดับผลตอบแทน\nคะแนนความมั่นใจตามเกณฑ์ ${quality.total}/100\nคะแนนคุณภาพสัญญาณ ไม่ใช่เปอร์เซ็นต์โอกาสชนะ\nแหล่งข้อมูล: ${market.label}\nกราฟ 15 นาที | แท่งปิด ${new Date(s.end).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nตรวจยืนยัน ${new Date().toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nราคาอ้างอิง ${entry}\nStop ${s.stop}\nเป้าแรก 2R ${target}\nแผนต่อเนื่อง 3R/4R ${record.runnerTargets.join(" / ")} หากทิศทางยังยืนยัน ไม่ใช่เป้ารับประกัน\nประเมินแรงตามฝั่งใน 5 นาที ไม่ได้บังคับจบไม้ใน 5 นาที\nเหตุผล: ทะลุกรอบพร้อม Volume แล้วทดสอบกลับ\nAI (${result.model}): ${result.reason}\nหมดอายุเมื่อปิดแท่งถัดไปหรือแตะ Stop ห้ามไล่ราคา ตรวจราคาในแอปก่อนเข้า\nระบบทดลอง ยังไม่พิสูจน์อัตราชนะ ไม่ได้ส่งคำสั่งซื้อขาย`);
         record.status='sent';record.messageId=receipt?.message_id??null;record.sentAt=receipt?.date?new Date(receipt.date*1000).toISOString():null;sent++;
       }catch{record.status='delivery_unknown';throw Error('Signal delivery uncertain');}
       finally{await save();}
@@ -188,6 +180,7 @@ async function run(){
   state.watchlist=state.watchlist.map(w=>({...w,status:state.sent?.[`${provider}-${w.symbol}-${w.side}-${w.candleTime}`]?'sent':'watch_window_ended'}));
   state.lastRun=new Date().toISOString();state.scanned=scanned;state.failed=failed;state.error=failed||stats.aiUnavailable?'partial_failure':null;state.provider=provider;state.lastRunner=process.env.MONITOR_ORIGIN==='local'?'local':'github';
   state.lastResult={totalMarkets:universe.totalMarkets,attempted:symbols.length,scope:universe.scope,scanSeconds:Math.round((Date.now()-scanStarted)/100)/10,sent,...stats,aiBudgetUsed:state.count};await save();
+  if(provider==='binance-futures'&&process.env.NODE_ENV!=='test'){try{const dir=new URL('./.ml/',import.meta.url);await mkdir(dir,{recursive:true});await appendFile(new URL('scan-history.jsonl',dir),JSON.stringify({checkedAt:state.lastRun,policy:notificationPolicy.version,...state.lastResult})+'\n');}catch{/* Local diagnostics must not interrupt delivery. */}}
   if(stats.aiUnavailable>0&&(!state.lastProviderNotice||Date.now()-Date.parse(state.lastProviderNotice)>=3600000)){
     await telegram(reviewStatusMessage(state));
     state.lastProviderNotice=new Date().toISOString();await save();
@@ -202,7 +195,7 @@ async function run(){
       `แหล่งราคา: ${market.label}`,
       provider==='binance-futures'?`คริปโต USDT Perpetual ทั้งหมด ${universe.totalMarkets} คู่ | พยายามตรวจ ${symbols.length} | อ่านสำเร็จ ${scanned} | อ่านล้มเหลว ${stats.marketDataFailed}`:`Kraken สำรองทั้งหมด ${universe.totalMarkets} ตลาด | ผ่าน Volume ≥ $1M ${symbols.length} | อ่านสำเร็จ ${scanned}`,
       `พบรูปแบบ ${stats.patterns} | ข้ามเพราะเก่า ${stats.stale} | ผ่านให้ AI ตรวจ ${stats.aiReviewed} | ส่งสัญญาณ ${sent}`,
-      `Sniper: เป้าเฝ้า ${stats.watchedTargets} | แรงเทียบกลุ่มไม่ผ่าน ${stats.rankRejected} | กราฟ 1 นาทียืนยัน ${stats.minuteConfirmed}`,
+      `รูปแบบยืนยัน 15 นาที ${stats.fifteenMinuteConfirmed} | ใช้เบรกกรอบและทดสอบกลับ โดยไม่บังคับเบรกซ้ำ 1 นาที`,
       `AI ปฏิเสธ ${stats.aiRejected} | AI ไม่พร้อม ${stats.aiUnavailable} | ข้อมูล/ส่งข้อความล้มเหลว ${failed}`,
       `ราคา/Stop ไม่ผ่าน ${stats.quoteRejected} | ประวัติแท่งไม่พอ ${stats.insufficientHistory} | ใช้เวลารอบนี้ ${state.lastResult.scanSeconds} วินาที`,
       `ใช้ AI ${state.count} ครั้งวันนี้ | โปรแกรมไม่ตั้งเพดานรายวัน (ยังมีข้อจำกัดบัญชี Gemini)`,

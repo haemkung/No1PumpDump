@@ -3,7 +3,7 @@ const originalFetch=globalThis.fetch, originalEnv={...process.env},originalNow=D
 const testNow=Math.floor(originalNow()/900000)*900000+60000;
 Date.now=()=>testNow;
 try{
-  process.env.TELEGRAM_BOT_TOKEN='test-token';process.env.TELEGRAM_CHAT_ID='test-chat';process.env.GEMINI_API_KEY='test-key';
+  process.env.NODE_ENV='test';process.env.TELEGRAM_BOT_TOKEN='test-token';process.env.TELEGRAM_CHAT_ID='test-chat';process.env.GEMINI_API_KEY='test-key';
   process.env.MONITOR_WATCH_MS='0';process.env.MONITOR_REVIEW_PAUSE_MS='0';
   for(const scenario of ['stale','rejected','unavailable','quiet','approved','held','late','binance','deliveryFail','over50','noTrigger','manyApproved','lowQuality','groqApproved']){
     process.env.MONITOR_ORIGIN=['binance','manyApproved'].includes(scenario)?'local':'github';process.env.GROQ_API_KEY=scenario==='groqApproved'?'test-groq':'';
@@ -44,9 +44,9 @@ try{
     if(scenario==='binance'){assert.equal(saved.provider,'binance-futures');assert.equal(saved.lastRunner,'local');assert.equal(saved.lastResult.attempted,3);}
     assert.equal(saved.lastResult.sent,['manyApproved','approved','groqApproved'].includes(scenario)?1:0,'only approved fresh setup may become a signal; maximum one attempt');
     assert.equal(signals,['manyApproved','approved','deliveryFail','groqApproved'].includes(scenario)?1:0);if(scenario==='deliveryFail'){const j=Object.values(saved.journal)[0];assert.equal(j.status,'delivery_unknown');assert.ok(saved.sent[j.id]);assert.equal(saved.lastResult.sent,0);}
-    if(['approved','groqApproved'].includes(scenario)){const records=Object.values(saved.journal);assert.equal(records.length,1);assert.equal(records[0].status,'sent');assert.equal(records[0].messageId,123);assert.ok(records[0].sentAt);assert.equal(records[0].entry,100.5);assert.equal(records[0].shadow.affectsLiveSelection,false);}
+    if(['approved','groqApproved'].includes(scenario)){const records=Object.values(saved.journal);assert.equal(records.length,1);assert.equal(records[0].status,'sent');assert.equal(records[0].messageId,123);assert.ok(records[0].sentAt);assert.equal(records[0].trigger1m,null);assert.equal(records[0].strategyVersion,'original-15m-retest-v6');assert.equal(records[0].entry,100.5);assert.equal(records[0].shadow.affectsLiveSelection,false);}
     if(scenario==='manyApproved'){const r=Object.values(saved.journal);assert.equal(r.length,1);assert.deepEqual(r.map(x=>x.selection.rank),[1]);assert.ok(r.every(x=>x.selection.shortlistCount===5));}
-    const expectedCalls=['stale','noTrigger'].includes(scenario)?0:scenario==='unavailable'?2:scenario==='binance'?3:['manyApproved','approved','deliveryFail','groqApproved'].includes(scenario)?1:2;
+    const expectedCalls=scenario==='stale'?0:scenario==='unavailable'?2:scenario==='binance'?3:['manyApproved','approved','deliveryFail','groqApproved'].includes(scenario)?1:2;
     assert.equal(aiCalls,expectedCalls);
     assert.equal(saved.count,(scenario==='over50'?50:49)+expectedCalls,'no application daily cap; attempts still recorded');
     assert.equal(messages,scenario==='quiet'?0:['manyApproved','approved','deliveryFail','groqApproved'].includes(scenario)?2:1,'signals plus throttled heartbeat only');
@@ -57,6 +57,6 @@ try{
 }finally{
   globalThis.fetch=originalFetch;
   Date.now=originalNow;
-  for(const key of ['TELEGRAM_BOT_TOKEN','TELEGRAM_CHAT_ID','GEMINI_API_KEY','GROQ_API_KEY','MONITOR_ORIGIN','MONITOR_WATCH_MS','MONITOR_REVIEW_PAUSE_MS']){if(originalEnv[key]===undefined)delete process.env[key];else process.env[key]=originalEnv[key];}
+  for(const key of ['NODE_ENV','TELEGRAM_BOT_TOKEN','TELEGRAM_CHAT_ID','GEMINI_API_KEY','GROQ_API_KEY','MONITOR_ORIGIN','MONITOR_WATCH_MS','MONITOR_REVIEW_PAUSE_MS']){if(originalEnv[key]===undefined)delete process.env[key];else process.env[key]=originalEnv[key];}
 }
 console.log('PASS: wider coverage, stale rejection, AI rejection/outage, no daily cap, minute confirmation, provider backoff, heartbeat throttling');
