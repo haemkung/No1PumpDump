@@ -1,3 +1,5 @@
+import {ENTRY_FEATURES,entryFeatureVector} from './entry-model-features.mjs';
+import {updateRuleComparisons} from './rule-comparison.mjs';
 import {notificationPolicy} from './notification-policy.mjs';
 import {readFile,writeFile,mkdir,rename} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
@@ -23,6 +25,7 @@ try{
   if(c.result?.pinned_message?.document?.file_name!=='no1-monitor-state.json')throw Error('Missing private state');
   const f=await json(root+'/getFile?file_id='+encodeURIComponent(c.result.pinned_message.document.file_id));
   const state=await json('https://api.telegram.org/file/bot'+token+'/'+f.result.file_path);
+  try{await updateRuleComparisons(state.ruleComparisons,json);}catch{console.error('Prospective rule comparison deferred; no fabricated outcomes.');}
   for(const r of Object.values(state.journal||{}))if(r.provider==='binance-futures'&&r.status==='sent'&&r.sentAt)records[r.id]={...records[r.id],...r};
   let failed=0;
   for(const r of Object.values(records)){
@@ -87,17 +90,17 @@ try{
     }
     await save('early-runtime.json',{checkedAt:new Date().toISOString(),matured:samples.length,required:20,mode:'shadow',affectsLiveSelection:false,prospective:prospectiveEarlyMetrics(Object.values(early))});
   }catch{/* Missing or temporarily busy early-watch data must not interrupt existing models. */}
-  const samples=Object.values(records).filter(r=>r.label&&Date.now()>=Date.parse(r.sentAt)+4*3600000).sort((a,b)=>Date.parse(a.sentAt)-Date.parse(b.sentAt)).map(r=>({id:r.id,time:r.sentAt,x:featureVector(r),y:r.label.target,ml:r.mlExperimental})).filter(s=>s.x);
+  const samples=Object.values(records).filter(r=>r.strategyVersion==='structure-regime-atr-v8'&&r.label&&Date.now()>=Date.parse(r.sentAt)+4*3600000).sort((a,b)=>Date.parse(a.sentAt)-Date.parse(b.sentAt)).map(r=>({id:r.id,time:r.sentAt,x:entryFeatureVector(r),y:r.label.target,ml:r.mlExperimental})).filter(s=>s.x);
   const fingerprint=createHash('sha256').update(JSON.stringify(samples.map(s=>[s.id,s.x,s.y]))).digest('hex');
-  const previous=await read('model.json',null);
-  if(previous?.fingerprint===fingerprint&&previous.mode!==entryMLMode)await save('model.json',{...previous,mode:entryMLMode,affectsLiveSelection:notificationPolicy.mlEvidenceEnabled,activationScope:'additional evidence to AI approval; no standalone ML veto or calibrated win claim',activatedAt:new Date().toISOString()});
+  const previous=await read('entry-model-v8.json',null);
+  if(previous?.fingerprint===fingerprint&&previous.mode!==entryMLMode)await save('entry-model-v8.json',{...previous,mode:entryMLMode,affectsLiveSelection:notificationPolicy.mlEvidenceEnabled,activationScope:'additional evidence to AI approval; no standalone ML veto or calibrated win claim',activatedAt:new Date().toISOString()});
   if(previous?.fingerprint===fingerprint){await save('runtime.json',{checkedAt:new Date().toISOString(),status:'unchanged',matured:samples.length,mode:entryMLMode,failed});console.log(JSON.stringify({status:'unchanged',matured:samples.length,mode:entryMLMode,aiCalls:0}));}
   else if(samples.length<20||new Set(samples.map(s=>s.y)).size<2){await save('runtime.json',{checkedAt:new Date().toISOString(),status:'collecting',matured:samples.length,required:20,mode:entryMLMode,failed});console.log(JSON.stringify({status:'collecting',matured:samples.length,aiCalls:0}));}
   else{
-    const split=Math.max(12,Math.floor(samples.length*.75)),training=samples.slice(0,split),test=samples.slice(split),prior=training.reduce((s,r)=>s+r.y,0)/training.length;
-    const temporal=evaluate(fit(training),test,prior),model=fit(samples),now=new Date().toISOString();
+    const split=Math.max(12,Math.floor(samples.length*.75)),test=samples.slice(split),training=samples.slice(0,split).filter(s=>Date.parse(s.time)+14400000<=Date.parse(test[0].time)),prior=training.length?training.reduce((s,r)=>s+r.y,0)/training.length:0;
+    const temporal=training.length>=12?evaluate(fit(training,ENTRY_FEATURES),test,prior):null,model=fit(samples,ENTRY_FEATURES),now=new Date().toISOString();
     const bundle={...model,version:'ml-shadow-'+now,trainedAt:now,trainedThrough:samples.at(-1).time,trainingCount:samples.length,positives:samples.filter(s=>s.y===1).length,fingerprint,mode:entryMLMode,affectsLiveSelection:notificationPolicy.mlEvidenceEnabled,calibrated:false,target:'TP before SL within four hours; no touch is target=0',retrospectiveTemporalTest:temporal,prospectiveObservations:samples.filter(s=>['shadow','evidence_assisted'].includes(s.ml?.mode)&&Date.parse(s.ml.trainedAt)<Date.parse(s.time)).length};
-    await save('model.json',bundle);await save('runtime.json',{checkedAt:now,status:'trained',matured:samples.length,modelVersion:bundle.version,mode:entryMLMode,failed,retrospectiveTemporalTest:temporal});
+    await save('entry-model-v8.json',bundle);await save('runtime.json',{checkedAt:now,status:'trained',matured:samples.length,modelVersion:bundle.version,mode:entryMLMode,failed,retrospectiveTemporalTest:temporal});
     console.log(JSON.stringify({status:'trained',matured:samples.length,mode:entryMLMode,temporalTest:temporal,aiCalls:0}));
   }
   const reactions=Object.values(records).filter(r=>r.reaction5m&&Date.now()>=Date.parse(r.sentAt)+300000).sort((a,b)=>Date.parse(a.sentAt)-Date.parse(b.sentAt)).map(r=>({id:r.id,time:r.sentAt,x:featureVector(r),y:r.reaction5m.target})).filter(s=>s.x);
@@ -107,4 +110,4 @@ try{
     const bundle={...fit(reactions),version:'reaction-shadow-'+now,trainedAt:now,trainingCount:reactions.length,fingerprint:reactionFingerprint,mode:'shadow',affectsLiveSelection:false,calibrated:false,target:'0.5R initial directional movement before Stop within five minutes; not a profitable trade claim',retrospectiveTemporalTest:evaluate(fit(training),reactions.slice(split),prior)};
     await save('reaction-model.json',bundle);console.log(JSON.stringify({reactionModel:'trained',samples:reactions.length,mode:'shadow',aiCalls:0}));
   }
-}catch{const retained=await read('model.json',null);await save('runtime.json',{checkedAt:new Date().toISOString(),status:'service_unavailable',trainingUpdateDeferred:true,mode:retained?.mode??entryMLMode,modelRetained:Boolean(retained),modelVersion:retained?.version??null,matured:retained?.trainingCount??0});console.error('ML update deferred; existing model retained. No credentials logged.');process.exitCode=1;}
+}catch{const retained=await read('entry-model-v8.json',null);await save('runtime.json',{checkedAt:new Date().toISOString(),status:'service_unavailable',trainingUpdateDeferred:true,mode:retained?.mode??entryMLMode,modelRetained:Boolean(retained),modelVersion:retained?.version??null,matured:retained?.trainingCount??0});console.error('ML update deferred; existing model retained. No credentials logged.');process.exitCode=1;}

@@ -1,3 +1,5 @@
+import './rule-comparison.test.mjs';
+import './entry-plan.test.mjs';
 import assert from 'node:assert/strict';
 await import('./entry-learning.test.mjs');
 await import('./runner-assessment.test.mjs');

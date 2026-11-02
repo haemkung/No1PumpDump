@@ -1,3 +1,5 @@
+import {entryFeatureVector} from './entry-model-features.mjs';
+import {entryPlan,marketContext,assessEntry} from './entry-plan.mjs';
 import {requestAIReview} from './ai-review-client.mjs';
 import {reviewWithFallback,configuredReviewModels,reviewStatusMessage} from './review-fallback.mjs';
 import {findSignal} from './strategy.mjs';
@@ -60,9 +62,9 @@ async function json(url,options={}){
 const provider=process.env.MONITOR_ORIGIN==='local'?'binance-futures':'kraken-futures';
 const market=createMarketData(provider,json);
 const quote=symbol=>market.quote(symbol);
-async function localShadowModel(file='model.json'){
+async function localShadowModel(file='entry-model-v8.json'){
   if(provider!=='binance-futures')return null;
-  try{const m=JSON.parse(await readFile(new URL('./.ml/'+file,import.meta.url),'utf8'));const age=Date.now()-Date.parse(m.trainedAt);return ((m.mode==='shadow'&&m.affectsLiveSelection===false)||(file==='model.json'&&m.mode==='evidence_assisted'&&m.affectsLiveSelection===true))&&m.trainingCount>=20&&age>=0&&age<7*86400000?m:null;}catch{return null;}
+  try{const m=JSON.parse(await readFile(new URL('./.ml/'+file,import.meta.url),'utf8'));const age=Date.now()-Date.parse(m.trainedAt);return ((m.mode==='shadow'&&m.affectsLiveSelection===false)||(file==='entry-model-v8.json'&&m.mode==='evidence_assisted'&&m.affectsLiveSelection===true))&&m.trainingCount>=20&&age>=0&&age<7*86400000?m:null;}catch{return null;}
 }
 async function telegram(text){const r=await json(`https://api.telegram.org/bot${token}/sendMessage`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:chat,text,disable_web_page_preview:true})});if(!r.ok)throw new Error('Telegram rejected message');return r.result;}
 async function review(candidate){
@@ -94,8 +96,10 @@ async function run(){
   const scanStarted=Date.now(), universe=await market.universe();
   const clock={serverTime:universe.serverTime},symbols=universe.symbols;
   if(!symbols.length)throw new Error('No liquid markets');
+  const benchmarkSymbol=provider==='binance-futures'?'BTCUSDT':'PF_XBTUSD';
+  let benchmark={available:false};try{const benchmarkBars=await market.bars(benchmarkSymbol,clock.serverTime);if(clock.serverTime-benchmarkBars.at(-1)?.end<=freshMs)benchmark=marketContext(benchmarkBars);}catch{}
   const candidates=[],board=[];let failed=0,scanned=0;
-  const stats={patterns:0,stale:0,duplicate:0,quoteRejected:0,aiReviewed:0,aiRejected:0,aiUnavailable:0,marketDataFailed:0,insufficientHistory:0,shadowClosePass:0};
+  const stats={patterns:0,stale:0,duplicate:0,quoteRejected:0,aiReviewed:0,aiRejected:0,aiUnavailable:0,marketDataFailed:0,insufficientHistory:0,shadowClosePass:0,newRuleRejected:0,newRuleReasons:{}};
   // Keep each invocation bounded; GitHub schedules may be late. Never alert on stale bars.
   for(let offset=0;offset<symbols.length;offset+=6){await Promise.all(symbols.slice(offset,offset+6).map(async symbol=>{
     try{
@@ -121,6 +125,7 @@ async function run(){
   let sent=0,deliveryAttempts=0;
   const targets=candidates.map(s=>({...s,return30m:board.find(b=>b.symbol===s.symbol)?.return30m??null})),checked=new Set();
   stats.watchedTargets=targets.length;stats.rankRejected=0;stats.minuteConfirmed=0;stats.fifteenMinuteConfirmed=targets.length;stats.mlEvidenceReviews=0;
+  if(state.ruleComparisons)state.ruleComparisons=Object.fromEntries(Object.entries(state.ruleComparisons).slice(-2000));
   state.watchlist=targets.map(s=>({symbol:s.symbol,side:s.side,return30m:s.return30m,candleTime:s.time,status:'watching'}));await save();
   const watchUntil=scanStarted; // Original 15m profile: review each closed setup once, no mandatory minute trigger.
   do{
@@ -130,10 +135,14 @@ async function run(){
     try{
       if(checked.has(s.symbol+'-'+s.time))continue;
       const book=await quote(s.symbol),bid=Number(book.bidPrice),ask=Number(book.askPrice),entry=s.side==='LONG'?ask:bid;
-      const risk=s.side==='LONG'?entry-s.stop:s.stop-entry;
-      if(!(bid>0&&ask>=bid)||(ask-bid)/bid>.001||Math.abs(entry-s.entry)/s.entry>.003||risk/entry<.003||risk/entry>.03){stats.quoteRejected++;continue;}
+      const assessment=assessEntry(s,bid,ask,benchmark,benchmarkSymbol);
+      const observation={id:`${entryPlan.version}-${provider}-${s.symbol}-${s.side}-${s.time}`,provider,symbol:s.symbol,side:s.side,observedAt:new Date().toISOString(),candleClosedAt:new Date(s.end).toISOString(),entry,originalStop:s.stop,assessment,features:{volumeRatio:s.volumeRatio,closeStrength:s.closeStrength}};
+      state.ruleComparisons??={};state.ruleComparisons[observation.id]=observation;
+      if(process.env.NODE_ENV!=='test'&&provider==='binance-futures'){await mkdir(new URL('./.ml/',import.meta.url),{recursive:true});await appendFile(new URL('./.ml/challenger-observations.jsonl',import.meta.url),JSON.stringify(observation)+'\n');}
+      if(!assessment.pass){stats.newRuleRejected++;stats.newRuleReasons[assessment.reason]=(stats.newRuleReasons[assessment.reason]||0)+1;continue;}
+
       const selectionQuality=signalScore({volumeRatio:s.volumeRatio,spreadRatio:(ask-bid)/bid,entryDrift:Math.abs(entry-s.entry)/s.entry,ageMs:Date.now()-s.end,approved:true});
-      if(selectionQuality)ready.push({...s,selectionQuality});
+      if(selectionQuality)ready.push({...s,originalStop:s.stop,stop:assessment.stop,entryAssessment:assessment,selectionQuality});
     }catch{stats.marketDataFailed++;}
   }
   const shortlist=shortlistConfirmed(ready);
@@ -146,8 +155,10 @@ async function run(){
       const trigger=null,triggerId=s.symbol+'-'+s.time;if(checked.has(triggerId))continue;
       const book=await quote(s.symbol);
       const bid=Number(book.bidPrice),ask=Number(book.askPrice),entry=s.side==='LONG'?ask:bid;
+      const updated=assessEntry({...s,stop:s.originalStop},bid,ask,benchmark,benchmarkSymbol);
+      if(!updated.pass){stats.newRuleRejected++;stats.newRuleReasons[updated.reason]=(stats.newRuleReasons[updated.reason]||0)+1;continue;}
+      s.stop=updated.stop;s.entryAssessment=updated;
       const risk=s.side==='LONG'?entry-s.stop:s.stop-entry;
-      if(!(bid>0&&ask>=bid)|| (ask-bid)/bid>.001||Math.abs(entry-s.entry)/s.entry>.003||risk/entry<.003||risk/entry>.03){stats.quoteRejected++;continue;}
       const target=s.side==='LONG'?entry+2*risk:entry-2*risk;
       stats.aiReviewed++;
       checked.add(triggerId);
@@ -157,13 +168,15 @@ async function run(){
       const learnedEvidence=notificationPolicy.mlEvidenceEnabled&&provider==='binance-futures'?entryLearningEvidence(learningRecords,mlModel,{side:s.side,entry,stop:s.stop,features:{volumeRatio:s.volumeRatio,closeStrength:s.closeStrength}}):{available:false};
       if(learnedEvidence.available)stats.mlEvidenceReviews++;
       const {neighborIds,...evidenceForReview}=learnedEvidence;
-      try{result=await review({...reviewSignal,entry,target,learningEvidence:evidenceForReview,runnerContext:continuation,trigger1m:trigger,objective:'Closed 15-minute breakout of the preceding 20-bar range with volume and a completed retest, matching the original setup family. Review structure and room for 2R. Do not require a second 1-minute breakout, invent evidence, or promise follow-through.'});}catch(e){stats.aiUnavailable++;failed++;if(e.code==='AI_UNAVAILABLE'||/^Remote service HTTP (429|503)$/.test(e.message)){state.aiBackoffUntil=new Date(Date.now()+60000).toISOString();await save();}continue;}
+      try{result=await review({...reviewSignal,entry,target,learningEvidence:evidenceForReview,runnerContext:continuation,trigger1m:trigger,objective:'Closed 15-minute breakout of the preceding 20-bar range with volume and a completed retest, with additional base-distance, BTC regime/relative strength and ATR structural Stop checks. The numerical thresholds are experimental, not validated profitability. Review structure and room for 2R. Do not require a second 1-minute breakout, invent evidence, or promise follow-through.'});}catch(e){stats.aiUnavailable++;failed++;if(e.code==='AI_UNAVAILABLE'||/^Remote service HTTP (429|503)$/.test(e.message)){state.aiBackoffUntil=new Date(Date.now()+60000).toISOString();await save();}continue;}
       if(!result){stats.aiUnavailable++;continue;}
       if(!result.approve){stats.aiRejected++;continue;}
       const latest=await quote(s.symbol),now={serverTime:Date.now()};
       const fb=Number(latest.bidPrice),fa=Number(latest.askPrice),price=s.side==='LONG'?fa:fb;
       if(now.serverTime-s.end>freshMs){stats.stale++;continue;}
       if(!(fb>0&&fa>=fb)||(fa-fb)/fb>.001||Math.abs(price-entry)/entry>.001){stats.quoteRejected++;continue;}
+      const finalAssessment=assessEntry({...s,stop:s.originalStop},fb,fa,benchmark,benchmarkSymbol);
+      if(!finalAssessment.pass){stats.newRuleRejected++;stats.newRuleReasons[finalAssessment.reason]=(stats.newRuleReasons[finalAssessment.reason]||0)+1;continue;}
       const quality=signalScore({volumeRatio:s.volumeRatio,spreadRatio:(fa-fb)/fb,entryDrift:Math.abs(price-s.entry)/s.entry,ageMs:Date.now()-s.end,approved:result.approve});
       if(!quality||quality.total<notificationPolicy.minQuality)continue;
       const id=`${provider}-${s.symbol}-${s.side}-${s.time}`;
@@ -171,17 +184,17 @@ async function run(){
       state.sent??={};state.sent[id]=new Date().toISOString();
       state.journal??={};
       const record={id,provider,symbol:s.symbol,side:s.side,entry,stop:s.stop,target,candleTime:s.time,candleClosedAt:new Date(s.end).toISOString(),verifiedAt:new Date().toISOString(),expiresAt:new Date(s.time+1800000).toISOString(),status:'delivery_pending',quality,features:{volumeRatio:s.volumeRatio,closeStrength:s.closeStrength,spreadRatio:(fa-fb)/fb,entryDrift:Math.abs(price-s.entry)/s.entry},strategyVersion:'breakout-retest-v1',shadow:{version:'close-strength-70-v1',pass:s.closeStrength>=.7,affectsLiveSelection:false}};
-      record.reviewModel=result.model;record.strategyVersion='original-15m-retest-v6';record.reactionWindowMs=300000;record.trigger1m=trigger;record.relativeRank=null;
+      record.reviewModel=result.model;record.strategyVersion=entryPlan.version;record.entryAssessment=s.entryAssessment;record.originalStop=s.originalStop;record.reactionWindowMs=300000;record.trigger1m=trigger;record.relativeRank=null;
       record.selection={policy:notificationPolicy.version,rank:sent+1,shortlistCount:shortlist.length,minQuality:notificationPolicy.minQuality,maxSignals:notificationPolicy.maxSignalsPerRound};
       record.runnerTargets=s.side==='LONG'?[entry+3*risk,entry+4*risk]:[entry-3*risk,entry-4*risk];
       record.runnerAssessment=runnerAssessment(result,continuation);
       record.learningEvidence=learnedEvidence;
-      if(mlModel){try{const rawScore=predict(mlModel,featureVector(record));if(Number.isFinite(rawScore))record.mlExperimental={modelVersion:mlModel.version,trainedAt:mlModel.trainedAt,trainingCount:mlModel.trainingCount,rawScore,calibrated:false,mode:learnedEvidence.available?'evidence_assisted':'shadow',affectsLiveSelection:Boolean(learnedEvidence.available)};}catch{}}
+      if(mlModel){try{const rawScore=predict(mlModel,entryFeatureVector(record));if(Number.isFinite(rawScore))record.mlExperimental={modelVersion:mlModel.version,trainedAt:mlModel.trainedAt,trainingCount:mlModel.trainingCount,rawScore,calibrated:false,mode:learnedEvidence.available?'evidence_assisted':'shadow',affectsLiveSelection:Boolean(learnedEvidence.available)};}catch{}}
       if(mlHistoricalModel){try{const rawScore=predict(mlHistoricalModel,featureVector(record));if(Number.isFinite(rawScore))record.mlHistoricalExperimental={modelVersion:mlHistoricalModel.version,trainedAt:mlHistoricalModel.trainedAt,trainingCount:mlHistoricalModel.trainingCount,rawScore,calibrated:false,mode:'shadow',affectsLiveSelection:false};}catch{}}
       if(mlReactionModel){try{const rawScore=predict(mlReactionModel,featureVector(record));if(Number.isFinite(rawScore))record.mlReactionExperimental={modelVersion:mlReactionModel.version,trainedAt:mlReactionModel.trainedAt,trainingCount:mlReactionModel.trainingCount,rawScore,calibrated:false,mode:'shadow',affectsLiveSelection:false};}catch{}}
       state.journal[id]=record;await save();deliveryAttempts++;
       try{
-        const receipt=await telegram(`สัญญาณทดลอง ${s.symbol} ${s.side}\nอันดับผ่านเกณฑ์ในรอบ ${record.selection.rank} | คัดจาก ${record.selection.shortlistCount} ตัวในรายชื่อสูงสุด Top 5 | ส่งสูงสุด ${notificationPolicy.maxSignalsPerRound} ตัว\nโหมด 15 นาที: เบรกกรอบ 20 แท่ง + ทดสอบกลับ + Volume\nคัดอันดับจากตัวที่ผ่านรูปแบบและการตรวจราคา ไม่ใช่การทำนายอันดับผลตอบแทน\nคะแนนความมั่นใจตามเกณฑ์ ${quality.total}/100\nคะแนนคุณภาพสัญญาณ ไม่ใช่เปอร์เซ็นต์โอกาสชนะ\nแหล่งข้อมูล: ${market.label}\nกราฟ 15 นาที | แท่งปิด ${new Date(s.end).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nตรวจยืนยัน ${new Date().toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nราคาอ้างอิง ${entry}\nStop ${s.stop}\nเป้าแรก 2R ${target}\n${learningEvidenceText(record.learningEvidence)}\nโอกาสไปต่อ: ${record.runnerAssessment.supported?'มีลุ้นไปต่อยาว':record.runnerAssessment.potential==='weak'?'แรงต่อเนื่องยังอ่อน':'ยังไม่ชัด'} (การประเมินตามข้อมูล ไม่ใช่โอกาสชนะ)\nเหตุผลการไปต่อ: ${record.runnerAssessment.reason}\nแผนต่อเนื่อง 3R/4R ${record.runnerTargets.join(" / ")} หากทิศทางยังยืนยัน ไม่ใช่เป้ารับประกัน\nประเมินแรงตามฝั่งใน 5 นาที ไม่ได้บังคับจบไม้ใน 5 นาที\nเหตุผล: ทะลุกรอบพร้อม Volume แล้วทดสอบกลับ\nAI (${result.model}): ${result.reason}\nหมดอายุเมื่อปิดแท่งถัดไปหรือแตะ Stop ห้ามไล่ราคา ตรวจราคาในแอปก่อนเข้า\nระบบทดลอง ยังไม่พิสูจน์อัตราชนะ ไม่ได้ส่งคำสั่งซื้อขาย`);
+        const receipt=await telegram(`สัญญาณทดลอง ${s.symbol} ${s.side}\nอันดับผ่านเกณฑ์ในรอบ ${record.selection.rank} | คัดจาก ${record.selection.shortlistCount} ตัวในรายชื่อสูงสุด Top 5 | ส่งสูงสุด ${notificationPolicy.maxSignalsPerRound} ตัว\nโหมดฐาน 15 นาที: ทดสอบกลับ + ระยะจากฐาน + BTC/แรงเทียบตลาด + Stop โครงสร้าง/ATR\nคัดอันดับจากตัวที่ผ่านรูปแบบและการตรวจราคา ไม่ใช่การทำนายอันดับผลตอบแทน\nคะแนนคุณภาพโครงสร้าง ${quality.total}/100\nคะแนนคุณภาพสัญญาณ ไม่ใช่เปอร์เซ็นต์โอกาสชนะ\nแหล่งข้อมูล: ${market.label}\nกราฟ 15 นาที | แท่งปิด ${new Date(s.end).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nตรวจยืนยัน ${new Date().toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}\nราคาอ้างอิง ${entry}\nStop โครงสร้าง/ATR ${s.stop}\nเป้าแรก 2R ${target}\n${learningEvidenceText(record.learningEvidence)}\nโอกาสไปต่อ: ${record.runnerAssessment.supported?'มีลุ้นไปต่อยาว':record.runnerAssessment.potential==='weak'?'แรงต่อเนื่องยังอ่อน':'ยังไม่ชัด'} (การประเมินตามข้อมูล ไม่ใช่โอกาสชนะ)\nเหตุผลการไปต่อ: ${record.runnerAssessment.reason}\nแผนต่อเนื่อง 3R/4R ${record.runnerTargets.join(" / ")} หากทิศทางยังยืนยัน ไม่ใช่เป้ารับประกัน\nประเมินแรงตามฝั่งใน 5 นาที ไม่ได้บังคับจบไม้ใน 5 นาที\nเหตุผล: ทะลุกรอบพร้อม Volume แล้วทดสอบกลับ\nAI (${result.model}): ${result.reason}\nหมดอายุเมื่อปิดแท่งถัดไปหรือแตะ Stop ห้ามไล่ราคา ตรวจราคาในแอปก่อนเข้า\nระบบทดลอง ยังไม่พิสูจน์อัตราชนะ ไม่ได้ส่งคำสั่งซื้อขาย`);
         record.status='sent';record.messageId=receipt?.message_id??null;record.sentAt=receipt?.date?new Date(receipt.date*1000).toISOString():null;sent++;
       }catch{record.status='delivery_unknown';throw Error('Signal delivery uncertain');}
       finally{await save();}
@@ -209,6 +222,7 @@ async function run(){
       `พบรูปแบบ ${stats.patterns} | ข้ามเพราะเก่า ${stats.stale} | ผ่านให้ AI ตรวจ ${stats.aiReviewed} | ส่งสัญญาณ ${sent}`,
       `รูปแบบยืนยัน 15 นาที ${stats.fifteenMinuteConfirmed} | ใช้เบรกกรอบและทดสอบกลับ โดยไม่บังคับเบรกซ้ำ 1 นาที`,
       `AI ปฏิเสธ ${stats.aiRejected} | AI ไม่พร้อม ${stats.aiUnavailable} | ข้อมูล/ส่งข้อความล้มเหลว ${failed}`,
+      `กฎฐาน/BTC/ATR คัดออก ${stats.newRuleRejected} (${JSON.stringify(stats.newRuleReasons)})`,
       `ราคา/Stop ไม่ผ่าน ${stats.quoteRejected} | ประวัติแท่งไม่พอ ${stats.insufficientHistory} | ใช้เวลารอบนี้ ${state.lastResult.scanSeconds} วินาที`,
       `ใช้ AI ${state.count} ครั้งวันนี้ | โปรแกรมไม่ตั้งเพดานรายวัน (ยังมีข้อจำกัดบัญชี Gemini)`,
       gap===null?'ยังไม่มีรอบก่อนหน้าให้เทียบ':`ห่างจากรอบก่อน ${gap} นาที${gap>35?' — ตาราง GitHub ล่าช้า ระบบไม่ได้ตรวจต่อเนื่องทุก 15 นาที':''}`,
