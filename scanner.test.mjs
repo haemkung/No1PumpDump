@@ -37,7 +37,7 @@ try{
         {symbol:'PF_THINUSD',tag:'perpetual',volumeQuote:500000,bid:100.48,ask:100.5}]});}
       if(url.includes('/api/charts/'))return reply({candles:url.endsWith('/1m')?minute:candles});
       if(url.includes('api.groq.com')){assert.equal(scenario,'groqApproved');aiCalls++;return reply({choices:[{finish_reason:'stop',message:{content:JSON.stringify({approve:true,reason:'test Groq review'})}}]});}
-      if(url.includes('generativelanguage.googleapis.com')){aiCalls++;if(scenario==='unavailable')return reply({},429);return reply({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({approve:['approved','deliveryFail','manyApproved','groqApproved'].includes(scenario),reason:'test review',runnerPotential:scenario==='approved'?'supported':'unclear',runnerReason:'แนวโน้มและปริมาณซื้อขายมีข้อมูลรองรับ'})}]}}]});}
+      if(url.includes('generativelanguage.googleapis.com')){const supplied=JSON.parse(JSON.parse(options.body).contents[0].parts[0].text);assert.equal(typeof supplied.learningEvidence?.available,'boolean','AI receives the learning-evidence status');aiCalls++;if(scenario==='unavailable')return reply({},429);return reply({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({approve:['approved','deliveryFail','manyApproved','groqApproved'].includes(scenario),reason:'test review',runnerPotential:scenario==='approved'?'supported':'unclear',runnerReason:'แนวโน้มและปริมาณซื้อขายมีข้อมูลรองรับ'})}]}}]});}
       throw Error('Unexpected request in isolated test');
     };
     await import('./scanner.mjs?test='+scenario);

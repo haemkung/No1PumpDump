@@ -1,9 +1,11 @@
+import {notificationPolicy} from './notification-policy.mjs';
 import {readFile,writeFile,mkdir,rename} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {featureVector,fit,evaluate} from './ml-model.mjs';
 import {evaluateMaturedSignal} from './ml-outcomes.mjs';
 import {prospectiveEarlyMetrics} from './early-learning.mjs';
 import {score85Report} from './score-validation.mjs';
+const entryMLMode=notificationPolicy.mlEvidenceEnabled?'evidence_assisted':'shadow';
 const dir=new URL('./.ml/',import.meta.url);await mkdir(dir,{recursive:true});
 async function read(name,fallback){try{return JSON.parse(await readFile(new URL(name,dir),'utf8'));}catch{return fallback;}}
 async function save(name,data){const url=new URL(name,dir),tmp=new URL(name+'.tmp',dir);await writeFile(tmp,JSON.stringify(data,null,2));await rename(tmp,url);}
@@ -88,14 +90,15 @@ try{
   const samples=Object.values(records).filter(r=>r.label&&Date.now()>=Date.parse(r.sentAt)+4*3600000).sort((a,b)=>Date.parse(a.sentAt)-Date.parse(b.sentAt)).map(r=>({id:r.id,time:r.sentAt,x:featureVector(r),y:r.label.target,ml:r.mlExperimental})).filter(s=>s.x);
   const fingerprint=createHash('sha256').update(JSON.stringify(samples.map(s=>[s.id,s.x,s.y]))).digest('hex');
   const previous=await read('model.json',null);
-  if(previous?.fingerprint===fingerprint){await save('runtime.json',{checkedAt:new Date().toISOString(),status:'unchanged',matured:samples.length,mode:'shadow',failed});console.log(JSON.stringify({status:'unchanged',matured:samples.length,mode:'shadow',aiCalls:0}));}
-  else if(samples.length<20||new Set(samples.map(s=>s.y)).size<2){await save('runtime.json',{checkedAt:new Date().toISOString(),status:'collecting',matured:samples.length,required:20,mode:'shadow',failed});console.log(JSON.stringify({status:'collecting',matured:samples.length,aiCalls:0}));}
+  if(previous?.fingerprint===fingerprint&&previous.mode!==entryMLMode)await save('model.json',{...previous,mode:entryMLMode,affectsLiveSelection:notificationPolicy.mlEvidenceEnabled,activationScope:'additional evidence to AI approval; no standalone ML veto or calibrated win claim',activatedAt:new Date().toISOString()});
+  if(previous?.fingerprint===fingerprint){await save('runtime.json',{checkedAt:new Date().toISOString(),status:'unchanged',matured:samples.length,mode:entryMLMode,failed});console.log(JSON.stringify({status:'unchanged',matured:samples.length,mode:entryMLMode,aiCalls:0}));}
+  else if(samples.length<20||new Set(samples.map(s=>s.y)).size<2){await save('runtime.json',{checkedAt:new Date().toISOString(),status:'collecting',matured:samples.length,required:20,mode:entryMLMode,failed});console.log(JSON.stringify({status:'collecting',matured:samples.length,aiCalls:0}));}
   else{
     const split=Math.max(12,Math.floor(samples.length*.75)),training=samples.slice(0,split),test=samples.slice(split),prior=training.reduce((s,r)=>s+r.y,0)/training.length;
     const temporal=evaluate(fit(training),test,prior),model=fit(samples),now=new Date().toISOString();
-    const bundle={...model,version:'ml-shadow-'+now,trainedAt:now,trainedThrough:samples.at(-1).time,trainingCount:samples.length,positives:samples.filter(s=>s.y===1).length,fingerprint,mode:'shadow',affectsLiveSelection:false,calibrated:false,target:'TP before SL within four hours; no touch is target=0',retrospectiveTemporalTest:temporal,prospectiveObservations:samples.filter(s=>s.ml?.mode==='shadow'&&Date.parse(s.ml.trainedAt)<Date.parse(s.time)).length};
-    await save('model.json',bundle);await save('runtime.json',{checkedAt:now,status:'trained',matured:samples.length,modelVersion:bundle.version,mode:'shadow',failed,retrospectiveTemporalTest:temporal});
-    console.log(JSON.stringify({status:'trained',matured:samples.length,mode:'shadow',temporalTest:temporal,aiCalls:0}));
+    const bundle={...model,version:'ml-shadow-'+now,trainedAt:now,trainedThrough:samples.at(-1).time,trainingCount:samples.length,positives:samples.filter(s=>s.y===1).length,fingerprint,mode:entryMLMode,affectsLiveSelection:notificationPolicy.mlEvidenceEnabled,calibrated:false,target:'TP before SL within four hours; no touch is target=0',retrospectiveTemporalTest:temporal,prospectiveObservations:samples.filter(s=>['shadow','evidence_assisted'].includes(s.ml?.mode)&&Date.parse(s.ml.trainedAt)<Date.parse(s.time)).length};
+    await save('model.json',bundle);await save('runtime.json',{checkedAt:now,status:'trained',matured:samples.length,modelVersion:bundle.version,mode:entryMLMode,failed,retrospectiveTemporalTest:temporal});
+    console.log(JSON.stringify({status:'trained',matured:samples.length,mode:entryMLMode,temporalTest:temporal,aiCalls:0}));
   }
   const reactions=Object.values(records).filter(r=>r.reaction5m&&Date.now()>=Date.parse(r.sentAt)+300000).sort((a,b)=>Date.parse(a.sentAt)-Date.parse(b.sentAt)).map(r=>({id:r.id,time:r.sentAt,x:featureVector(r),y:r.reaction5m.target})).filter(s=>s.x);
   const reactionFingerprint=createHash('sha256').update(JSON.stringify(reactions.map(s=>[s.id,s.x,s.y]))).digest('hex'),oldReaction=await read('reaction-model.json',null);
