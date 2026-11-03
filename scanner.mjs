@@ -1,3 +1,4 @@
+import {sweepRules} from './sweep-reclaim.mjs';
 import {entryFeatureVector} from './entry-model-features.mjs';
 import {entryPlan,marketContext,assessEntry} from './entry-plan.mjs';
 import {requestAIReview} from './ai-review-client.mjs';
@@ -62,9 +63,9 @@ async function json(url,options={}){
 const provider=process.env.MONITOR_ORIGIN==='local'?'binance-futures':'kraken-futures';
 const market=createMarketData(provider,json);
 const quote=symbol=>market.quote(symbol);
-async function localShadowModel(file='entry-model-v8.json'){
+async function localShadowModel(file='entry-model-v9.json'){
   if(provider!=='binance-futures')return null;
-  try{const m=JSON.parse(await readFile(new URL('./.ml/'+file,import.meta.url),'utf8'));const age=Date.now()-Date.parse(m.trainedAt);return ((m.mode==='shadow'&&m.affectsLiveSelection===false)||(file==='entry-model-v8.json'&&m.mode==='evidence_assisted'&&m.affectsLiveSelection===true))&&m.trainingCount>=20&&age>=0&&age<7*86400000?m:null;}catch{return null;}
+  try{const m=JSON.parse(await readFile(new URL('./.ml/'+file,import.meta.url),'utf8'));const age=Date.now()-Date.parse(m.trainedAt);return ((m.mode==='shadow'&&m.affectsLiveSelection===false)||(file==='entry-model-v9.json'&&m.mode==='evidence_assisted'&&m.affectsLiveSelection===true))&&m.trainingCount>=20&&age>=0&&age<7*86400000?m:null;}catch{return null;}
 }
 async function telegram(text){const r=await json(`https://api.telegram.org/bot${token}/sendMessage`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:chat,text,disable_web_page_preview:true})});if(!r.ok)throw new Error('Telegram rejected message');return r.result;}
 async function review(candidate){
@@ -82,9 +83,15 @@ async function review(candidate){
     contents:[{role:'user',parts:[{text:JSON.stringify(candidate)}]}],generationConfig:{responseMimeType:'application/json',responseSchema:schema,maxOutputTokens:2048}})});
   }});
 }
+async function ensureSweepState(){
+ if(!notificationPolicy.sweepReclaimEnabled||state.sweepStateMessageId)return;
+ if(provider==='binance-futures'){try{const config=JSON.parse(await readFile(new URL('./.sweep/config.json',import.meta.url),'utf8'));if(config.chatId===String(chat)&&Number.isInteger(config.messageId))state.sweepStateMessageId=config.messageId;}catch{}}
+ if(!state.sweepStateMessageId){const form=new FormData();form.set('chat_id',chat);form.set('caption','No1 sweep bootstrap');form.set('document',new Blob([JSON.stringify({watch:{},done:{},journal:{},count:0})],{type:'application/json'}),'no1-sweep-state.json');const response=await json('https://api.telegram.org/bot'+token+'/sendDocument',{method:'POST',body:form});if(!response.ok||!response.result?.message_id)throw Error('Sweep state creation failed');state.sweepStateMessageId=response.result.message_id;}await save();
+}
 async function run(){
   if(process.argv.includes('--test-telegram')){await telegram('ทดสอบ GitHub Cloud สำเร็จ ส่งจากเซิร์ฟเวอร์ออนไลน์ ไม่ใช่เครื่องคอม แหล่งราคา: Kraken Futures (ราคาและรายชื่ออาจต่างจาก Binance) ระบบตรวจเป็นรอบประมาณ 15 นาทีและอาจล่าช้า สัญญาณทดลอง ไม่รับประกันกำไร');console.log('Telegram cloud test delivered.');return;}
   if(!await claimSlot()){console.log(JSON.stringify({skipped:true,reason:'outside_fresh_window_or_slot_already_claimed'}));return;}
+  await ensureSweepState();
   if(state.day!==day()){state.day=day();state.count=0;await save();}
   const previousRun=state.lastRun;
   const previousRunner=state.lastRunner;
@@ -124,7 +131,7 @@ async function run(){
   }
   let sent=0,deliveryAttempts=0;
   const targets=candidates.map(s=>({...s,return30m:board.find(b=>b.symbol===s.symbol)?.return30m??null})),checked=new Set();
-  stats.watchedTargets=targets.length;stats.rankRejected=0;stats.minuteConfirmed=0;stats.fifteenMinuteConfirmed=targets.length;stats.mlEvidenceReviews=0;
+  stats.watchedTargets=targets.length;stats.rankRejected=0;stats.minuteConfirmed=0;stats.fifteenMinuteConfirmed=targets.length;stats.mlEvidenceReviews=0;stats.sweepQueued=0;
   if(state.ruleComparisons)state.ruleComparisons=Object.fromEntries(Object.entries(state.ruleComparisons).slice(-2000));
   state.watchlist=targets.map(s=>({symbol:s.symbol,side:s.side,return30m:s.return30m,candleTime:s.time,status:'watching'}));await save();
   const watchUntil=scanStarted; // Original 15m profile: review each closed setup once, no mandatory minute trigger.
@@ -147,6 +154,11 @@ async function run(){
   }
   const shortlist=shortlistConfirmed(ready);
   for(const s of shortlist){
+    if(notificationPolicy.sweepReclaimEnabled){
+      state.sweepSeeds??={};const id=`${sweepRules.version}-${provider}-${s.symbol}-${s.side}-${s.time}`;
+      if(!state.sweepSeeds[id]){state.sweepSeeds[id]={id,version:sweepRules.version,provider,symbol:s.symbol,side:s.side,seededAt:new Date().toISOString(),sourceCandleClosedAt:new Date(s.end).toISOString(),level:s.stop,atr14:s.entryAssessment.atr14,isBenchmark:s.symbol===benchmarkSymbol,quality:s.selectionQuality,features:{volumeRatio:s.volumeRatio,closeStrength:s.closeStrength}};stats.sweepQueued++;}
+      state.sweepSeeds=Object.fromEntries(Object.entries(state.sweepSeeds).filter(([,seed])=>Date.now()<Date.parse(seed.seededAt)+sweepRules.watchMs).slice(-500));continue;
+    }
     if(deliveryAttempts>=notificationPolicy.maxSignalsPerRound)break;
     if(Date.now()>=deadline-15000||Date.now()<Date.parse(state.aiBackoffUntil||0))break;
     if(state.sent?.[`${provider}-${s.symbol}-${s.side}-${s.time}`])continue;
@@ -220,7 +232,7 @@ async function run(){
       `แหล่งราคา: ${market.label}`,
       provider==='binance-futures'?`คริปโต USDT Perpetual ทั้งหมด ${universe.totalMarkets} คู่ | พยายามตรวจ ${symbols.length} | อ่านสำเร็จ ${scanned} | อ่านล้มเหลว ${stats.marketDataFailed}`:`Kraken สำรองทั้งหมด ${universe.totalMarkets} ตลาด | ผ่าน Volume ≥ $1M ${symbols.length} | อ่านสำเร็จ ${scanned}`,
       `พบรูปแบบ ${stats.patterns} | ข้ามเพราะเก่า ${stats.stale} | ผ่านให้ AI ตรวจ ${stats.aiReviewed} | ส่งสัญญาณ ${sent}`,
-      `รูปแบบยืนยัน 15 นาที ${stats.fifteenMinuteConfirmed} | ใช้เบรกกรอบและทดสอบกลับ โดยไม่บังคับเบรกซ้ำ 1 นาที`,
+      notificationPolicy.sweepReclaimEnabled?`เพิ่มฐานเฝ้า ${stats.sweepQueued} | รอทะลุระดับแล้วปิดกลับ 2 แท่ง 1 นาที ตัวเฝ้านาทีเป็นผู้ส่งสัญญาณ`:`รูปแบบยืนยัน 15 นาที ${stats.fifteenMinuteConfirmed}`,
       `AI ปฏิเสธ ${stats.aiRejected} | AI ไม่พร้อม ${stats.aiUnavailable} | ข้อมูล/ส่งข้อความล้มเหลว ${failed}`,
       `กฎฐาน/BTC/ATR คัดออก ${stats.newRuleRejected} (${JSON.stringify(stats.newRuleReasons)})`,
       `ราคา/Stop ไม่ผ่าน ${stats.quoteRejected} | ประวัติแท่งไม่พอ ${stats.insufficientHistory} | ใช้เวลารอบนี้ ${state.lastResult.scanSeconds} วินาที`,

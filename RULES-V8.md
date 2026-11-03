@@ -1,3 +1,5 @@
+Superseded for live entries by RULES-V9.md. Retained as historical discovery/eligibility specification.
+
 # Live rule change: structure-regime-atr-v8
 
 Activated on user instruction on 3 November 2026 (Thailand). These thresholds are preregistered experimental choices, not empirically proven improvements. Both local Binance and cloud Kraken runners use the same gate logic, with BTCUSDT and PF_XBTUSD benchmarks respectively. Missing benchmark/history rejects the candidate and is counted explicitly. The existing scan schedule, fresh closed 15m breakout/retest, quote guards, AI approval and maximum one delivery attempt per round remain.

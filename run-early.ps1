@@ -8,5 +8,6 @@ try{
   $node=Join-Path $env:USERPROFILE '.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe'
   $groqPath=Join-Path $secretDir 'groq.xml'
   if(Test-Path -LiteralPath $groqPath){$env:GROQ_API_KEY=[Net.NetworkCredential]::new('',(Import-Clixml -LiteralPath $groqPath)).Password}
-  & $node (Join-Path $PSScriptRoot 'early-watch.mjs');if($LASTEXITCODE -ne 0){throw 'Early watch deferred'}
-}finally{Remove-Item Env:TELEGRAM_BOT_TOKEN,Env:TELEGRAM_CHAT_ID,Env:GEMINI_API_KEY,Env:GROQ_API_KEY -ErrorAction SilentlyContinue;$mutex.ReleaseMutex();$mutex.Dispose()}
+  $env:MONITOR_ORIGIN='local'
+  & $node (Join-Path $PSScriptRoot 'sweep-watch.mjs');if($LASTEXITCODE -ne 0){throw 'Early watch deferred'}
+}finally{Remove-Item Env:TELEGRAM_BOT_TOKEN,Env:TELEGRAM_CHAT_ID,Env:GEMINI_API_KEY,Env:GROQ_API_KEY,Env:MONITOR_ORIGIN -ErrorAction SilentlyContinue;$mutex.ReleaseMutex();$mutex.Dispose()}

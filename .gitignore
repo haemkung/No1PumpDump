@@ -11,3 +11,5 @@ watchdog-runtime.json
 *.tmp
 .ml/
 .early/
+
+.sweep/

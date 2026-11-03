@@ -1,3 +1,5 @@
+import './sweep-reclaim.test.mjs';
+import './sweep-watch.test.mjs';
 import './rule-comparison.test.mjs';
 import './entry-plan.test.mjs';
 import assert from 'node:assert/strict';

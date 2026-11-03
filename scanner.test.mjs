@@ -21,6 +21,7 @@ try{
     const reply=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'content-type':'application/json'}});
     globalThis.fetch=async (url,options={})=>{
       url=String(url);
+      if(url.endsWith('/sendDocument'))return reply({ok:true,result:{message_id:321}});
       if(url.endsWith('/getChat'))return reply({ok:true,result:{pinned_message:{message_id:1,document:{file_name:'no1-monitor-state.json',file_id:'test-file'}}}});
       if(url.endsWith('/exchangeInfo'))return reply({symbols:(scenario==='manyApproved'?Array.from({length:8},(_,i)=>'C'+i+'USDT'):['TESTUSDT','OTHERUSDT','THINUSDT']).map(symbol=>({symbol,status:'TRADING',contractType:'PERPETUAL',quoteAsset:'USDT',underlyingType:'COIN'}))});
       if(url.endsWith('/fapi/v1/time'))return reply({serverTime:Date.now()});
@@ -45,18 +46,17 @@ try{
     assert.equal(saved.scanned,scenario==='manyApproved'?8:['binance','cloudThenLocal'].includes(scenario)?3:2,'Binance includes thin markets; Kraken backup retains its threshold');
     if(scenario==='cloudThenLocal'){assert.match(claimedCaption,/local-followup$/);assert.equal(saved.completedSlot.provider,'binance-futures');}
     if(scenario==='binance'){assert.equal(saved.provider,'binance-futures');assert.equal(saved.lastRunner,'local');assert.equal(saved.lastResult.attempted,3);}
-    assert.equal(saved.lastResult.sent,['manyApproved','approved','groqApproved'].includes(scenario)?1:0,'only approved fresh setup may become a signal; maximum one attempt');
-    assert.equal(signals,['manyApproved','approved','deliveryFail','groqApproved'].includes(scenario)?1:0);if(scenario==='deliveryFail'){const j=Object.values(saved.journal)[0];assert.equal(j.status,'delivery_unknown');assert.ok(saved.sent[j.id]);assert.equal(saved.lastResult.sent,0);}
-    if(['approved','groqApproved'].includes(scenario)){const records=Object.values(saved.journal);assert.equal(records.length,1);assert.equal(records[0].status,'sent');assert.equal(records[0].messageId,123);assert.ok(records[0].sentAt);assert.equal(records[0].trigger1m,null);assert.equal(records[0].strategyVersion,'structure-regime-atr-v8');assert.equal(records[0].entry,100.5);assert.equal(records[0].shadow.affectsLiveSelection,false);if(scenario==='approved')assert.equal(records[0].runnerAssessment.supported,true);}
-    if(scenario==='manyApproved'){const r=Object.values(saved.journal);assert.equal(r.length,1);assert.deepEqual(r.map(x=>x.selection.rank),[1]);assert.ok(r.every(x=>x.selection.shortlistCount===5));}
+    assert.equal(saved.lastResult.sent,0,'Discovery scanner must no longer send direct entries');assert.equal(signals,0);assert.equal(saved.sweepStateMessageId,321);
+    if(!['stale','missingBenchmark','oppositeBenchmark'].includes(scenario)){assert.ok(Object.keys(saved.sweepSeeds||{}).length>0);assert.ok(Object.values(saved.sweepSeeds).every(s=>s.version==='sweep-reclaim-v9'&&s.level>0&&s.atr14>0));}
+    if(scenario==='manyApproved')assert.equal(Object.keys(saved.sweepSeeds).length,5,'Only shortlisted bases become sweep watches');
     if(['missingBenchmark','oppositeBenchmark'].includes(scenario)){assert.equal(saved.lastResult.newRuleRejected,2);assert.equal(Object.keys(saved.ruleComparisons).length,2);}
-    const expectedCalls=['stale','missingBenchmark','oppositeBenchmark'].includes(scenario)?0:scenario==='unavailable'?2:['binance','cloudThenLocal'].includes(scenario)?3:['manyApproved','approved','deliveryFail','groqApproved'].includes(scenario)?1:2;
+    const expectedCalls=0;
     assert.equal(aiCalls,expectedCalls);
     assert.equal(saved.count,(scenario==='over50'?50:49)+expectedCalls,'no application daily cap; attempts still recorded');
-    assert.equal(messages,scenario==='quiet'?0:['manyApproved','approved','deliveryFail','groqApproved'].includes(scenario)?2:1,'signals plus throttled heartbeat only');
+    assert.equal(messages,scenario==='quiet'?0:1,'signals plus throttled heartbeat only');
     if(scenario==='stale')assert.equal(saved.lastResult.stale,2);
-    if(scenario==='rejected')assert.equal(saved.lastResult.aiRejected,2);
-    if(scenario==='unavailable'){assert.equal(saved.lastResult.aiUnavailable,1);assert.equal(saved.error,'partial_failure');}
+    if(scenario==='rejected')assert.equal(saved.lastResult.aiRejected,0,'Discovery must defer AI review to the minute trigger');
+    if(scenario==='unavailable')assert.equal(saved.lastResult.aiUnavailable,0,'AI is deferred until the sweep trigger');
   }
 }finally{
   globalThis.fetch=originalFetch;
