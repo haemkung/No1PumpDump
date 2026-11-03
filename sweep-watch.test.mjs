@@ -26,6 +26,7 @@ for(const scenario of ['approved','groqApproved','rejected','deliveryUnknown','o
  try{const options={env:{TELEGRAM_BOT_TOKEN:'test-token',TELEGRAM_CHAT_ID:'test-chat',GEMINI_API_KEY:'test-key',GROQ_API_KEY:scenario==='groqApproved'?'test-groq':'',MONITOR_ORIGIN:'local'},fetchImpl,clock:()=>now,dir};const result=await runSweepWatch(options);
  const delivery=['approved','groqApproved','deliveryUnknown'].includes(scenario);assert.equal(sends,delivery?1:0);assert.equal(ai,['approved','groqApproved','rejected','deliveryUnknown','postPrice'].includes(scenario)?1:0);
  if(delivery){const record=Object.values(state.journal)[0];assert.equal(record.strategyVersion,'sweep-reclaim-v9');assert.equal(record.status,['approved','groqApproved'].includes(scenario)?'sent':'delivery_unknown');assert.ok(state.lastAttemptAt);assert.equal(state.done.seed.status,'delivery_attempted');}
+ if(scenario==='rejected'){assert.equal(state.done.seed.review.reason,'fixture');assert.ok(state.done.seed.review.model);}
  if(scenario==='held')assert.equal(result.skipped,true);
  if(scenario==='approved'){const again=await runSweepWatch(options);assert.equal(again.skipped,true);assert.equal(sends,1,'Same minute must not deliver twice');}
  }finally{assert.ok(resolve(folder).startsWith(resolve(testRoot)+sep));await rm(folder,{recursive:true,force:true});}
