@@ -47,9 +47,9 @@ try{
     if(scenario==='cloudThenLocal'){assert.match(claimedCaption,/local-followup$/);assert.equal(saved.completedSlot.provider,'binance-futures');}
     if(scenario==='binance'){assert.equal(saved.provider,'binance-futures');assert.equal(saved.lastRunner,'local');assert.equal(saved.lastResult.attempted,3);}
     assert.equal(saved.lastResult.sent,0,'Discovery scanner must no longer send direct entries');assert.equal(signals,0);assert.equal(saved.sweepStateMessageId,321);
-    if(!['stale','missingBenchmark','oppositeBenchmark'].includes(scenario)){assert.ok(Object.keys(saved.sweepSeeds||{}).length>0);assert.ok(Object.values(saved.sweepSeeds).every(s=>s.version==='sweep-reclaim-v9'&&s.level>0&&s.atr14>0));}
+    if(scenario!=='stale'){assert.ok(Object.keys(saved.sweepSeeds||{}).length>0);assert.ok(Object.values(saved.sweepSeeds).every(s=>s.version==='sweep-reclaim-v9'&&s.level>0&&s.atr14>0));}
     if(scenario==='manyApproved')assert.equal(Object.keys(saved.sweepSeeds).length,5,'Only shortlisted bases become sweep watches');
-    if(['missingBenchmark','oppositeBenchmark'].includes(scenario)){assert.equal(saved.lastResult.newRuleRejected,2);assert.equal(Object.keys(saved.ruleComparisons).length,2);}
+    if(['missingBenchmark','oppositeBenchmark'].includes(scenario)){assert.equal(saved.lastResult.newRuleRejected,0);assert.equal(Object.keys(saved.sweepSeeds).length,2,'Defer entry market checks until a fresh reclaim actually occurs');assert.equal(Object.keys(saved.ruleComparisons).length,2);}
     const expectedCalls=0;
     assert.equal(aiCalls,expectedCalls);
     assert.equal(saved.count,(scenario==='over50'?50:49)+expectedCalls,'no application daily cap; attempts still recorded');

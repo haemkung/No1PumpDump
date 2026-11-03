@@ -146,6 +146,15 @@ async function run(){
       const observation={id:`${entryPlan.version}-${provider}-${s.symbol}-${s.side}-${s.time}`,provider,symbol:s.symbol,side:s.side,observedAt:new Date().toISOString(),candleClosedAt:new Date(s.end).toISOString(),entry,originalStop:s.stop,assessment,features:{volumeRatio:s.volumeRatio,closeStrength:s.closeStrength}};
       state.ruleComparisons??={};state.ruleComparisons[observation.id]=observation;
       if(process.env.NODE_ENV!=='test'&&provider==='binance-futures'){await mkdir(new URL('./.ml/',import.meta.url),{recursive:true});await appendFile(new URL('./.ml/challenger-observations.jsonl',import.meta.url),JSON.stringify(observation)+'\n');}
+      if(notificationPolicy.sweepReclaimEnabled){
+        const context=marketContext(s.candles),last=s.candles.at(-1);
+        if(!context.available||!(bid>0&&ask>=bid)){stats.seedDataRejected=(stats.seedDataRejected||0)+1;continue;}
+        const level=s.side==='LONG'?Math.min(s.stop,last.low-entryPlan.stopBufferAtr*context.atr):Math.max(s.stop,last.high+entryPlan.stopBufferAtr*context.atr);
+        if(!(level>0)){stats.seedDataRejected=(stats.seedDataRejected||0)+1;continue;}
+        const selectionQuality=signalScore({volumeRatio:s.volumeRatio,spreadRatio:(ask-bid)/bid,entryDrift:0,ageMs:Date.now()-s.end,approved:true});
+        if(selectionQuality)ready.push({...s,originalStop:s.stop,stop:level,entryAssessment:{atr14:context.atr},selectionQuality});
+        continue;
+      }
       if(!assessment.pass){stats.newRuleRejected++;stats.newRuleReasons[assessment.reason]=(stats.newRuleReasons[assessment.reason]||0)+1;continue;}
 
       const selectionQuality=signalScore({volumeRatio:s.volumeRatio,spreadRatio:(ask-bid)/bid,entryDrift:Math.abs(entry-s.entry)/s.entry,ageMs:Date.now()-s.end,approved:true});
