@@ -20,6 +20,8 @@ export function sweepEntry(seed,confirmation,bid,ask,context,benchmark,now=Date.
  const dir=seed.side==='LONG'?1:-1,entry=dir===1?ask:bid,risk=dir*(entry-confirmation.stop),spread=ask-bid;
  if(![bid,ask].every(Number.isFinite)||!(bid>0&&ask>=bid&&risk>0)||risk/entry<.003||risk/entry>.03||spread/bid>.001||spread/risk>.1)return {pass:false,reason:'quote_stop_or_cost'};
  if(!(dir*(entry-seed.level)>0)||Math.abs(entry-confirmation.reference)/confirmation.reference>.003||Math.abs(entry-confirmation.reference)/risk>.2)return {pass:false,reason:'reclaim_lost_or_chase'};
- const relative=dir*(context.return30m-benchmark.return30m);if(benchmark.direction===-dir||(!seed.isBenchmark&&relative<0))return {pass:false,reason:'current_market_or_relative_strength'};
+ const relative=dir*(context.return30m-benchmark.return30m);
+ if(!Number.isFinite(relative))return {pass:false,reason:'missing_current_context'};
+ if(benchmark.direction===-dir)return {pass:false,reason:'opposing_btc_trend'};
  return {pass:true,entry,stop:confirmation.stop,target:entry+dir*2*risk,risk,entryAssessment:{version:sweepRules.version,atr14:context.atr,baseDistanceAtr:Math.abs(entry-seed.level)/context.atr,relativeReturn30m:relative,spreadToRisk:spread/risk,riskRatio:risk/entry,seedAtr:seed.atr14}};
 }

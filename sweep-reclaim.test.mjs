@@ -8,3 +8,7 @@ const mirror=bars.map(x=>({...x,high:200-x.low,low:200-x.high,close:200-x.close}
 console.log('Sweep rules passed: causal two-close confirmation, missing minutes, stale signal, both directions and fresh market checks');
 
 assert.equal(sweepConfirmation(seed,[...bars,b(2,102,99)],t+180001).status,'expired_invalidated','Do not enter a confirmation whose new Stop already broke while waiting');
+
+const weaker = sweepEntry(seed,c,99,99.01,{...ctx,return30m:-.005},btc,t+120500);
+assert.equal(weaker.pass,true);
+assert.ok(weaker.entryAssessment.relativeReturn30m<0);
