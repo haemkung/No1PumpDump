@@ -21,7 +21,12 @@ for(const scenario of ['approved','groqApproved','rejected','deliveryUnknown','o
  if(url.includes('/klines?'))return response(Array.from({length:40},(_,i)=>{let close=105-i*.15;if(scenario==='oppositeBTC'&&url.includes('symbol=BTCUSDT'))close=95+i*.15;const time=t-(40-i)*900000;return [time,close,close+1,close-1,close,100,time+899999];}));
  if(url.includes('/ticker/bookTicker')){quotes++;return response({bidPrice:scenario==='postPrice'&&quotes>1?99.9:99,askPrice:scenario==='postPrice'&&quotes>1?99.91:99.01});}
  if(url.includes('api.groq.com')){assert.equal(options.method,'POST');assert.equal(body.model,'openai/gpt-oss-120b');assert.equal(body.response_format.type,'json_schema');assert.ok(body.messages.some(m=>m.role==='user'));ai++;return response({choices:[{finish_reason:'stop',message:{content:JSON.stringify({approve:true,reason:'fixture Groq',runnerPotential:'unclear',runnerReason:'fixture'})}}]});}
- if(url.includes('generativelanguage.googleapis.com')){assert.equal(options.method,'POST');assert.equal(typeof options.body,'string');assert.equal(body.contents[0].role,'user');assert.equal(typeof JSON.parse(body.contents[0].parts[0].text).confirmation.confirmedAt,'number');ai++;return response({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({approve:scenario!=='rejected',reason:'fixture',runnerPotential:'unclear',runnerReason:'fixture'})}]}}]});}
+ if(url.includes('generativelanguage.googleapis.com')){assert.equal(options.method,'POST');assert.equal(typeof options.body,'string');assert.equal(body.contents[0].role,'user');const evidence=JSON.parse(body.contents[0].parts[0].text).confirmation;
+ assert.equal(evidence.reclaimCandles.length,2);
+ assert.equal(evidence.reclaimCandles[1].time-evidence.reclaimCandles[0].time,60000);
+ assert.equal(evidence.reclaimCandles[1].end,evidence.confirmedAt);
+ assert.ok(evidence.sweepCandle.high>100);
+ assert.ok(evidence.reclaimCandles.every(bar=>bar.close<100));ai++;return response({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({approve:scenario!=='rejected',reason:'fixture',runnerPotential:'unclear',runnerReason:'fixture'})}]}}]});}
  throw Error('Unexpected isolated sweep request');};
  try{const options={env:{TELEGRAM_BOT_TOKEN:'test-token',TELEGRAM_CHAT_ID:'test-chat',GEMINI_API_KEY:'test-key',GROQ_API_KEY:scenario==='groqApproved'?'test-groq':'',MONITOR_ORIGIN:'local'},fetchImpl,clock:()=>now,dir};const result=await runSweepWatch(options);
  const delivery=['approved','groqApproved','deliveryUnknown'].includes(scenario);assert.equal(sends,delivery?1:0);assert.equal(ai,['approved','groqApproved','rejected','deliveryUnknown','postPrice'].includes(scenario)?1:0);

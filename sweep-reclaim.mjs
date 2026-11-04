@@ -1,12 +1,16 @@
 export const sweepRules=Object.freeze({version:'sweep-reclaim-v9',watchMs:14400000,reclaimMs:900000,freshMs:90000,gapMs:900000,bufferAtr:.15});
+function snapshot({time,end,high,low,close}){
+ return {time,end,high,low,close};
+}
 export function sweepConfirmation(seed,bars,now=Date.now()){
  const start=Date.parse(seed.seededAt),dir=seed.side==='LONG'?1:seed.side==='SHORT'?-1:0,deadline=start+sweepRules.watchMs;
  if(!Number.isFinite(start)||!dir||!(seed.level>0&&seed.atr14>0)||!Array.isArray(bars))return {status:'invalid_seed'};
  const closed=bars.filter(b=>b.time>=Math.ceil(start/60000)*60000&&b.end<now&&b.end<=deadline&&['time','end','high','low','close'].every(k=>Number.isFinite(b[k]))).sort((a,b)=>a.time-b.time);
  const at=closed.findIndex(b=>dir===1?b.low<seed.level:b.high>seed.level);if(at<0)return {status:now>=deadline?'expired_watch':'waiting_sweep'};
  const first=closed[at],until=Math.min(deadline,first.time+sweepRules.reclaimMs);let streak=0,last=null,extreme=dir===1?first.low:first.high;
- for(const b of closed.slice(at)){if(b.end>until)break;if(last!==null&&b.time-last!==60000)streak=0;last=b.time;extreme=dir===1?Math.min(extreme,b.low):Math.max(extreme,b.high);streak=dir*(b.close-seed.level)>0?streak+1:0;
-  if(streak>=2){const stop=extreme-dir*sweepRules.bufferAtr*seed.atr14;const invalidated=bars.some(n=>n.time>b.end&&n.time<=now&&(dir===1?n.low<=stop:n.high>=stop))||bars.some(n=>n.time>b.end&&n.end<now&&dir*(n.close-seed.level)<=0);if(invalidated)return {status:'expired_invalidated',confirmedAt:b.end};return {status:now-b.end>sweepRules.freshMs?'expired_confirmation':'confirmed',confirmedAt:b.end,sweepTime:first.time,extreme,stop,reference:b.close};}
+ for(const [index,b] of closed.entries()){if(index<at)continue;if(b.end>until)break;if(last!==null&&b.time-last!==60000)streak=0;last=b.time;extreme=dir===1?Math.min(extreme,b.low):Math.max(extreme,b.high);streak=dir*(b.close-seed.level)>0?streak+1:0;
+  if(streak>=2){const stop=extreme-dir*sweepRules.bufferAtr*seed.atr14;const invalidated=bars.some(n=>n.time>b.end&&n.time<=now&&(dir===1?n.low<=stop:n.high>=stop))||bars.some(n=>n.time>b.end&&n.end<now&&dir*(n.close-seed.level)<=0);if(invalidated)return {status:'expired_invalidated',confirmedAt:b.end};return {status:now-b.end>sweepRules.freshMs?'expired_confirmation':'confirmed',confirmedAt:b.end,sweepTime:first.time,extreme,stop,reference:b.close,
+   sweepCandle:snapshot(first),reclaimCandles:closed.slice(index-1,index+1).map(snapshot)};}
  }
  return {status:now>=until?'expired_reclaim':'waiting_reclaim',sweepTime:first.time};
 }
