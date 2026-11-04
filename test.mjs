@@ -24,7 +24,7 @@ assert.equal(confirmMinute(minuteFixture,'SHORT',1320000),null);
 assert.equal(confirmMinute(minuteFixture,'LONG',1400000),null);
 minuteFixture.at(-1).volume=100;assert.equal(confirmMinute(minuteFixture,'LONG',1320000),null);
 await import('./ml.test.mjs');
-import {findSignal} from './strategy.mjs';
+import {findSignal,closedThirtyMinuteBars} from './strategy.mjs';
 import {signalScore} from './signal-score.mjs';
 const best={volumeRatio:3,spreadRatio:0,entryDrift:0,ageMs:0,approved:true};
 assert.equal(signalScore(best).total,100);
@@ -42,3 +42,12 @@ const bars=Array.from({length:20},(_,i)=>({time:i*900000,high:100,low:98,close:9
 bars.push({time:18000000,high:102,low:99,close:101,volume:160},{time:18900000,high:101,low:99.8,close:100.5,volume:100});
 assert.equal(findSignal(bars).side,'LONG');bars.at(-2).volume=149;assert.equal(findSignal(bars),null);bars.at(-2).volume=160;bars.at(-1).close=99;assert.equal(findSignal(bars),null);
 bars[20]={time:18000000,high:99,low:96,close:97,volume:160};bars[21]={time:18900000,high:98.2,low:96,close:97.5,volume:100};assert.equal(findSignal(bars).side,'SHORT');bars[21].time+=900000;assert.equal(findSignal(bars),null);console.log('PASS: long/short, weak volume, invalid retest, missing candle');
+
+const halfHourFixture = Array.from({length:44}, (_,i)=>({
+  time:i*900000,end:(i+1)*900000-1,open:99,high:100,low:98,close:99,volume:50
+}));
+for (const bar of halfHourFixture.slice(40,42)) Object.assign(bar,{high:102,close:101,volume:100});
+for (const bar of halfHourFixture.slice(42)) Object.assign(bar,{high:101,low:100,close:101});
+assert.equal(findSignal(closedThirtyMinuteBars(halfHourFixture),1800000)?.side,'LONG');
+assert.equal(findSignal(closedThirtyMinuteBars(halfHourFixture.slice(0,-1)),1800000),null);
+assert.equal(findSignal(closedThirtyMinuteBars(halfHourFixture.filter((_,i)=>i!==20)),1800000),null);

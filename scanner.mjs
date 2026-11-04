@@ -3,7 +3,7 @@ import {entryFeatureVector} from './entry-model-features.mjs';
 import {entryPlan,marketContext,assessEntry} from './entry-plan.mjs';
 import {requestAIReview} from './ai-review-client.mjs';
 import {reviewWithFallback,configuredReviewModels,reviewStatusMessage} from './review-fallback.mjs';
-import {findSignal} from './strategy.mjs';
+import {findSignal,closedThirtyMinuteBars} from './strategy.mjs';
 import {runnerContext,runnerAssessment} from './runner-assessment.mjs';
 import {entryLearningEvidence,learningEvidenceText} from './entry-learning.mjs';
 import {createMarketData} from './market-data.mjs';
@@ -115,12 +115,21 @@ async function run(){
       scanned++;
       if(bars.length<22){stats.insufficientHistory++;return;}
       board.push({symbol,return30m:bars.at(-1).close/bars.at(-3).close-1});
-      const s=findSignal(bars);if(!s)return;
-      stats.patterns++;
-      if(s.closeStrength>=.7)stats.shadowClosePass++;
-      if(clock.serverTime-s.end>freshMs){stats.stale++;return;}
-      if(state.sent?.[`${provider}-${symbol}-${s.side}-${s.time}`]||state.sent?.[`${symbol}-${s.side}-${s.time}`]){stats.duplicate++;return;}
-      candidates.push({symbol,...s,candles:bars.slice(-40)});
+      const frames = [['15m', bars, 900000]];
+      if (notificationPolicy.sweepReclaimEnabled && bars.at(-1).time % 1800000 === 900000) {
+        frames.push(['30m', closedThirtyMinuteBars(bars), 1800000]);
+      }
+      for (const [sourceTimeframe, candles, intervalMs] of frames) {
+        const signal = findSignal(candles, intervalMs);
+        if (!signal) continue;
+        stats.patterns++;
+        if (sourceTimeframe === '30m') stats.patterns30m = (stats.patterns30m || 0) + 1;
+        if (signal.closeStrength >= .7) stats.shadowClosePass++;
+        if (clock.serverTime - signal.end > freshMs) {stats.stale++;continue;}
+        const key = `${symbol}-${signal.side}-${signal.time}`;
+        if (state.sent?.[`${provider}-${key}`] || state.sent?.[key]) {stats.duplicate++;continue;}
+        candidates.push({symbol,...signal,sourceTimeframe,candles:candles.slice(-40)});
+      }
     }catch{failed++;stats.marketDataFailed++;}
   }));}
   if(failed===symbols.length)throw new Error('All market data requests failed');
@@ -131,7 +140,7 @@ async function run(){
   }
   let sent=0,deliveryAttempts=0;
   const targets=candidates.map(s=>({...s,return30m:board.find(b=>b.symbol===s.symbol)?.return30m??null})),checked=new Set();
-  stats.watchedTargets=targets.length;stats.rankRejected=0;stats.minuteConfirmed=0;stats.fifteenMinuteConfirmed=targets.length;stats.mlEvidenceReviews=0;stats.sweepQueued=0;
+  stats.watchedTargets=targets.length;stats.rankRejected=0;stats.minuteConfirmed=0;stats.fifteenMinuteConfirmed=targets.filter(s=>s.sourceTimeframe==="15m").length;stats.mlEvidenceReviews=0;stats.sweepQueued=0;
   if(state.ruleComparisons)state.ruleComparisons=Object.fromEntries(Object.entries(state.ruleComparisons).slice(-2000));
   state.watchlist=targets.map(s=>({symbol:s.symbol,side:s.side,return30m:s.return30m,candleTime:s.time,status:'watching'}));await save();
   const watchUntil=scanStarted; // Original 15m profile: review each closed setup once, no mandatory minute trigger.
@@ -143,7 +152,7 @@ async function run(){
       if(checked.has(s.symbol+'-'+s.time))continue;
       const book=await quote(s.symbol),bid=Number(book.bidPrice),ask=Number(book.askPrice),entry=s.side==='LONG'?ask:bid;
       const assessment=assessEntry(s,bid,ask,benchmark,benchmarkSymbol);
-      const observation={id:`${entryPlan.version}-${provider}-${s.symbol}-${s.side}-${s.time}`,provider,symbol:s.symbol,side:s.side,observedAt:new Date().toISOString(),candleClosedAt:new Date(s.end).toISOString(),entry,originalStop:s.stop,assessment,features:{volumeRatio:s.volumeRatio,closeStrength:s.closeStrength}};
+      const observation={id:`${entryPlan.version}-${provider}-${s.symbol}-${s.side}-${s.time}${s.sourceTimeframe==="30m"?"-30m":""}`,sourceTimeframe:s.sourceTimeframe,provider,symbol:s.symbol,side:s.side,observedAt:new Date().toISOString(),candleClosedAt:new Date(s.end).toISOString(),entry,originalStop:s.stop,assessment,features:{volumeRatio:s.volumeRatio,closeStrength:s.closeStrength}};
       state.ruleComparisons??={};state.ruleComparisons[observation.id]=observation;
       if(process.env.NODE_ENV!=='test'&&provider==='binance-futures'){await mkdir(new URL('./.ml/',import.meta.url),{recursive:true});await appendFile(new URL('./.ml/challenger-observations.jsonl',import.meta.url),JSON.stringify(observation)+'\n');}
       if(notificationPolicy.sweepReclaimEnabled){
@@ -161,11 +170,11 @@ async function run(){
       if(selectionQuality)ready.push({...s,originalStop:s.stop,stop:assessment.stop,entryAssessment:assessment,selectionQuality});
     }catch{stats.marketDataFailed++;}
   }
-  const shortlist=shortlistConfirmed(ready);
+  const shortlist=shortlistConfirmed(ready,notificationPolicy.sweepReclaimEnabled);
   for(const s of shortlist){
     if(notificationPolicy.sweepReclaimEnabled){
-      state.sweepSeeds??={};const id=`${sweepRules.version}-${provider}-${s.symbol}-${s.side}-${s.time}`;
-      if(!state.sweepSeeds[id]){state.sweepSeeds[id]={id,version:sweepRules.version,provider,symbol:s.symbol,side:s.side,seededAt:new Date().toISOString(),sourceCandleClosedAt:new Date(s.end).toISOString(),level:s.stop,atr14:s.entryAssessment.atr14,isBenchmark:s.symbol===benchmarkSymbol,quality:s.selectionQuality,features:{volumeRatio:s.volumeRatio,closeStrength:s.closeStrength}};stats.sweepQueued++;}
+      state.sweepSeeds??={};const id=`${sweepRules.version}-${provider}-${s.symbol}-${s.side}-${s.time}${s.sourceTimeframe==='30m'?'-30m':''}`;
+      if(!state.sweepSeeds[id]){state.sweepSeeds[id]={id,version:sweepRules.version,provider,symbol:s.symbol,side:s.side,seededAt:new Date().toISOString(),sourceTimeframe:s.sourceTimeframe,sourceCandleClosedAt:new Date(s.end).toISOString(),level:s.stop,atr14:s.entryAssessment.atr14,isBenchmark:s.symbol===benchmarkSymbol,quality:s.selectionQuality,features:{volumeRatio:s.volumeRatio,closeStrength:s.closeStrength}};stats.sweepQueued++;if(s.sourceTimeframe==='30m')stats.sweepQueued30m=(stats.sweepQueued30m||0)+1;}
       state.sweepSeeds=Object.fromEntries(Object.entries(state.sweepSeeds).filter(([,seed])=>Date.now()<Date.parse(seed.seededAt)+sweepRules.watchMs).slice(-500));continue;
     }
     if(deliveryAttempts>=notificationPolicy.maxSignalsPerRound)break;
