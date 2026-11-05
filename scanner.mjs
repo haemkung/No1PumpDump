@@ -1,3 +1,4 @@
+import {momentumWatchMs} from './momentum.mjs';
 import {sweepRules} from './sweep-reclaim.mjs';
 import {entryFeatureVector} from './entry-model-features.mjs';
 import {entryPlan,marketContext,assessEntry} from './entry-plan.mjs';
@@ -114,7 +115,7 @@ async function run(){
       if(!bars.length)throw Error('No closed candles');
       scanned++;
       if(bars.length<22){stats.insufficientHistory++;return;}
-      board.push({symbol,return30m:bars.at(-1).close/bars.at(-3).close-1});
+      board.push({symbol,return30m:bars.at(-1).close/bars.at(-3).close-1, candles:bars});
       const frames = [['15m', bars, 900000]];
       if (notificationPolicy.sweepReclaimEnabled && bars.at(-1).time % 1800000 === 900000) {
         frames.push(['30m', closedThirtyMinuteBars(bars), 1800000]);
@@ -140,6 +141,29 @@ async function run(){
   }
   let sent=0,deliveryAttempts=0;
   const targets=candidates.map(s=>({...s,return30m:board.find(b=>b.symbol===s.symbol)?.return30m??null})),checked=new Set();
+  if(notificationPolicy.sweepReclaimEnabled){
+    const seededAt = new Date().toISOString();
+    state.momentumSeeds ??= {};
+    const seeds = [];
+    for(const side of ['LONG','SHORT']){
+      const direction = side === 'LONG' ? 1 : -1;
+      const ranked = board.filter(row => direction * row.return30m >= .003 &&
+        clock.serverTime - row.candles.at(-1).end <= freshMs)
+        .sort((a,b) => direction * (b.return30m-a.return30m) || a.symbol.localeCompare(b.symbol));
+      for(const row of ranked.slice(0,5)){
+        const context = marketContext(row.candles);
+        if(!context.available)continue;
+        seeds.push({
+          id: `momentum-v1-${provider}-${row.symbol}-${side}-${row.candles.at(-1).time}`,
+          mode:'momentum', provider, symbol:row.symbol, side, seededAt,
+          expiresAt:Date.parse(seededAt)+momentumWatchMs, sourceTimeframe:'1m',
+          atr14:context.atr, isBenchmark:row.symbol===benchmarkSymbol
+        });
+      }
+    }
+    state.momentumSeeds[provider] = seeds;
+    stats.momentumQueued = seeds.length;
+  }
   stats.watchedTargets=targets.length;stats.rankRejected=0;stats.minuteConfirmed=0;stats.fifteenMinuteConfirmed=targets.filter(s=>s.sourceTimeframe==="15m").length;stats.mlEvidenceReviews=0;stats.sweepQueued=0;
   if(state.ruleComparisons)state.ruleComparisons=Object.fromEntries(Object.entries(state.ruleComparisons).slice(-2000));
   state.watchlist=targets.map(s=>({symbol:s.symbol,side:s.side,return30m:s.return30m,candleTime:s.time,status:'watching'}));await save();

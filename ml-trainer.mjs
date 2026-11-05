@@ -50,6 +50,14 @@ try{
     }
   }
   await save('records.json',records);
+  const momentum = Object.values(records).filter(record=>record.strategyVersion==='momentum-v1');
+  await save('momentum-5m-report.json',{
+    checkedAt:new Date().toISOString(), sent:momentum.length,
+    reachedHalfR:momentum.filter(record=>record.reaction5m?.kind==='TP').length,
+    stopFirst:momentum.filter(record=>record.reaction5m?.kind==='SL').length,
+    noTouch:momentum.filter(record=>record.reaction5m && !['TP','SL'].includes(record.reaction5m.kind)).length,
+    pending:momentum.filter(record=>!record.reaction5m).length
+  });
   for(const name of ['3R','4R']){
     const rows=Object.values(records).filter(r=>r.runnerOutcomes?.[name]).sort((a,b)=>Date.parse(a.sentAt)-Date.parse(b.sentAt));
     const samples=rows.map(r=>({id:r.id,time:r.sentAt,x:featureVector(r),y:r.runnerOutcomes[name].target})).filter(s=>s.x);
