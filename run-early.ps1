@@ -6,6 +6,9 @@ try{
   $secret=Import-Clixml (Join-Path $secretDir 'telegram.xml');$gemini=Import-Clixml (Join-Path $secretDir 'gemini.xml')
   $env:TELEGRAM_BOT_TOKEN=[Net.NetworkCredential]::new('',$secret.Token).Password;$env:TELEGRAM_CHAT_ID=[string]$secret.ChatId;$env:GEMINI_API_KEY=[Net.NetworkCredential]::new('',$gemini).Password
   $node=Join-Path $env:USERPROFILE '.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe'
+  $localFeedRunning=$false
+  try{$localFeedRunning=(Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:18741/watchlist.json' -TimeoutSec 2).StatusCode -eq 200}catch{}
+  if(!$localFeedRunning){Start-Process -FilePath $node -ArgumentList ('"'+(Join-Path $PSScriptRoot 'watchlist-local.mjs')+'"') -WindowStyle Hidden}
   $groqPath=Join-Path $secretDir 'groq.xml'
   if(Test-Path -LiteralPath $groqPath){$env:GROQ_API_KEY=[Net.NetworkCredential]::new('',(Import-Clixml -LiteralPath $groqPath)).Password}
   $env:MONITOR_ORIGIN='local'
