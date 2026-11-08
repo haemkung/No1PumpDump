@@ -1,4 +1,5 @@
 const minuteMs = 60_000;
+export const fastReversalFreshMs = 45_000;
 
 export function fastReversal(symbol, rows, now) {
   const bars = rows.map(row => ({
@@ -12,7 +13,7 @@ export function fastReversal(symbol, rows, now) {
     (i>0 && bar.time!==bars[i-1].time+minuteMs)))return null;
 
   const base=bars.slice(0,-2),shock=bars.at(-2),bounce=bars.at(-1);
-  if(now-bounce.end>45_000 || shock.quoteVolume<50_000 || bounce.quoteVolume<=0)return null;
+  if(now-bounce.end>fastReversalFreshMs || shock.quoteVolume<50_000 || bounce.quoteVolume<=0)return null;
   const average=base.reduce((sum,bar)=>sum+bar.quoteVolume,0)/base.length;
   if(!(average>0))return null;
   const volumeRatio=shock.quoteVolume/average;
@@ -32,12 +33,11 @@ export function fastReversal(symbol, rows, now) {
      direction*(bounce.close-level)<=0 || direction*(bounce.close-bounce.open)<=0 ||
      recovery<.5 || shockFlow<.6 || reversalFlow<.6)return null;
 
-  const stop=extreme*(1-direction*.001);
   return {
     seed:{id:`fast-reversal-v1-${symbol}-${shock.time}`,mode:'fast-reversal',provider:'binance-futures',
       symbol,side,level,isBenchmark:symbol==='BTCUSDT',sourceTimeframe:'1m',
       features:{volumeRatio,closeStrength:reversalFlow}},
-    confirmation:{status:'confirmed',confirmedAt:bounce.end,stop,reference:bounce.close,
+    confirmation:{status:'confirmed',confirmedAt:bounce.end,reference:bounce.close,
       shockCandle:shock,bounceCandle:bounce,priorRangeLevel:level,volumeRatio,recovery,shockFlow,reversalFlow}
   };
 }
@@ -65,4 +65,21 @@ export async function scanFastReversals(symbols, {fetchImpl, clock, until, candl
   }
   await Promise.all(Array.from({length:18},worker));
   return {checked,failed,rateLimited,candidates};
+}
+
+export function fastReversalEntry(seed, confirmation, bid, ask, context, benchmark, now) {
+  const age=now-confirmation.confirmedAt;
+  if(confirmation.status!=='confirmed' || age<0 || age>fastReversalFreshMs)
+    return {pass:false,reason:'stale_confirmation'};
+  if(!context?.available || !benchmark?.available)
+    return {pass:false,reason:'missing_current_context'};
+  if(![bid,ask].every(Number.isFinite) || bid<=0 || ask<bid || (ask-bid)/bid>.001)
+    return {pass:false,reason:'quote_spread'};
+  const direction=seed.side==='LONG'?1:-1;
+  const entry=direction===1?ask:bid;
+  if(direction*(entry-seed.level)<=0 || Math.abs(entry/confirmation.reference-1)>.003)
+    return {pass:false,reason:'reclaim_lost_or_chase'};
+  if(benchmark.direction===-direction)
+    return {pass:false,reason:'opposing_btc_trend'};
+  return {pass:true,entry,spreadRatio:(ask-bid)/bid};
 }
