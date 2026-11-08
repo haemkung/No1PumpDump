@@ -16,6 +16,10 @@ import {notificationPolicy,shortlistConfirmed} from './notification-policy.mjs';
 
 const token=process.env.TELEGRAM_BOT_TOKEN, chat=process.env.TELEGRAM_CHAT_ID, key=process.env.GEMINI_API_KEY;
 const freshMs=180000;
+const scanSlotMs=900000;
+const provider=process.env.MONITOR_ORIGIN==='local'?'binance-futures':'kraken-futures';
+const cloudDiscovery=provider==='kraken-futures'&&notificationPolicy.sweepReclaimEnabled;
+const discoveryFreshMs=cloudDiscovery?scanSlotMs:freshMs;
 if(!token||!chat||!key) throw new Error('Missing required repository Secrets; no scan performed.');
 async function load(){
   const c=await json(`https://api.telegram.org/bot${token}/getChat`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:chat})});
@@ -26,22 +30,23 @@ async function load(){
   if(typeof s.count!=='number'||!s.day||typeof s.sent!=='object')throw new Error('Invalid private state.');
   return {...s,messageId:m.message_id};
 }
-let slotCaption=null, ownsSlot=false, deadline=Infinity;
+let slotCaption=null, claimedSlot=null, ownsSlot=false, deadline=Infinity;
 const state=await load();
 async function claimSlot(){
   const now=Date.now();
-  if(now%900000>=freshMs)return false;
-  const slot=Math.floor(now/900000),completed=state.completedSlot;
+  const slot=Math.floor(now/scanSlotMs),completed=state.completedSlot;
+  const slotDeadline=(slot+1)*scanSlotMs-2500;
+  if(cloudDiscovery ? slotDeadline-now<60000 : now%scanSlotMs>=freshMs)return false;
   const followup=provider==='binance-futures'&&completed?.slot===slot&&completed.provider==='kraken-futures'&&completed.attempts===0;
   if(completed?.slot===slot&&!followup)return false;
   const caption='No1 scan-slot '+slot+(followup?' local-followup':'');
   // Telegram atomically rejects a second identical caption edit. Both runners
   // use the same slot value; every state save preserves it until the next slot.
-  const r=await fetch(`https://api.telegram.org/bot${token}/editMessageCaption`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:chat,message_id:state.messageId,caption}),signal:AbortSignal.timeout(25000)});
+  const r=await fetch(`https://api.telegram.org/bot${token}/editMessageCaption`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:chat,message_id:state.messageId,caption}),signal:AbortSignal.timeout(Math.min(25000,slotDeadline-Date.now()))});
   const response=await r.json();
   if(r.status===400&&/message is not modified/i.test(response.description||''))return false;
   if(!r.ok||!response.ok)throw new Error('Slot claim failed');
-  slotCaption=caption;ownsSlot=true;deadline=Date.now()+240000;return true;
+  slotCaption=caption;claimedSlot=slot;ownsSlot=true;deadline=Math.min(Date.now()+240000,slotDeadline);return true;
 }
 async function save(){
   const form=new FormData();
@@ -61,7 +66,6 @@ async function json(url,options={}){
   if(!r.ok) throw new Error(`Remote service HTTP ${r.status}`);
   return r.json();
 }
-const provider=process.env.MONITOR_ORIGIN==='local'?'binance-futures':'kraken-futures';
 const market=createMarketData(provider,json);
 const quote=symbol=>market.quote(symbol);
 async function localShadowModel(file='entry-model-v9.json'){
@@ -126,7 +130,7 @@ async function run(){
         stats.patterns++;
         if (sourceTimeframe === '30m') stats.patterns30m = (stats.patterns30m || 0) + 1;
         if (signal.closeStrength >= .7) stats.shadowClosePass++;
-        if (clock.serverTime - signal.end > freshMs) {stats.stale++;continue;}
+        if (clock.serverTime - signal.end > discoveryFreshMs) {stats.stale++;continue;}
         const key = `${symbol}-${signal.side}-${signal.time}`;
         if (state.sent?.[`${provider}-${key}`] || state.sent?.[key]) {stats.duplicate++;continue;}
         candidates.push({symbol,...signal,sourceTimeframe,candles:candles.slice(-40)});
@@ -148,7 +152,7 @@ async function run(){
     for(const side of ['LONG','SHORT']){
       const direction = side === 'LONG' ? 1 : -1;
       const ranked = board.filter(row => direction * row.return30m >= .003 &&
-        clock.serverTime - row.candles.at(-1).end <= freshMs)
+        clock.serverTime - row.candles.at(-1).end <= discoveryFreshMs)
         .sort((a,b) => direction * (b.return30m-a.return30m) || a.symbol.localeCompare(b.symbol));
       for(const row of ranked.slice(0,5)){
         const context = marketContext(row.candles);
@@ -171,7 +175,7 @@ async function run(){
   do{
   const ready=[];
   for(const s of targets){
-    if(Date.now()>=deadline-15000||Date.now()-s.end>freshMs||state.sent?.[`${provider}-${s.symbol}-${s.side}-${s.time}`])continue;
+    if(Date.now()>=deadline-15000||Date.now()-s.end>discoveryFreshMs||state.sent?.[`${provider}-${s.symbol}-${s.side}-${s.time}`])continue;
     try{
       if(checked.has(s.symbol+'-'+s.time))continue;
       const book=await quote(s.symbol),bid=Number(book.bidPrice),ask=Number(book.askPrice),entry=s.side==='LONG'?ask:bid;
@@ -184,7 +188,7 @@ async function run(){
         if(!context.available||!(bid>0&&ask>=bid)){stats.seedDataRejected=(stats.seedDataRejected||0)+1;continue;}
         const level=s.side==='LONG'?Math.min(s.stop,last.low-entryPlan.stopBufferAtr*context.atr):Math.max(s.stop,last.high+entryPlan.stopBufferAtr*context.atr);
         if(!(level>0)){stats.seedDataRejected=(stats.seedDataRejected||0)+1;continue;}
-        const selectionQuality=signalScore({volumeRatio:s.volumeRatio,spreadRatio:(ask-bid)/bid,entryDrift:0,ageMs:Date.now()-s.end,approved:true});
+        const selectionQuality=signalScore({volumeRatio:s.volumeRatio,spreadRatio:(ask-bid)/bid,entryDrift:0,ageMs:cloudDiscovery?Math.min(freshMs,Date.now()-s.end):Date.now()-s.end,approved:true});
         if(selectionQuality)ready.push({...s,originalStop:s.stop,stop:level,entryAssessment:{atr14:context.atr},selectionQuality});
         continue;
       }
@@ -287,7 +291,7 @@ async function run(){
   if(!state.cloudStarted){await telegram('เปิดตัวเฝ้าตลาดบน GitHub สำเร็จแล้ว ปิดคอมได้ ตัวรันออนไลน์จะตรวจประมาณทุก 15 นาที (อาจล่าช้า) ใช้ข้อมูล Kraken Futures แทน Binance ที่บล็อกเซิร์ฟเวอร์ รายชื่อและราคาอาจต่างกัน ส่งเฉพาะสัญญาณที่ผ่านกฎและ Gemini โดยไม่ตั้งเพดานรายวันในโปรแกรม ไม่รับประกันกำไร');state.cloudStarted=true;await save();}
   // Publish completion only after all other saves/messages. A local follower may
   // then safely reuse this state if cloud made no delivery attempt in the slot.
-  state.completedSlot={slot:Math.floor(scanStarted/900000),provider,attempts:deliveryAttempts,completedAt:new Date().toISOString()};await save();
+  state.completedSlot={slot:claimedSlot,provider,attempts:deliveryAttempts,completedAt:new Date().toISOString()};await save();
   console.log(JSON.stringify({provider,totalMarkets:universe.totalMarkets,attempted:symbols.length,scanned,sent,failed,...stats,aiUsed:state.count,aiCap:null,scanSeconds:state.lastResult.scanSeconds,complete:true}));
 }
 try{await run();}catch(e){if(ownsSlot){state.lastRun=new Date().toISOString();state.error='service_unavailable';try{await save()}catch{}}const safe=/^Remote service HTTP \d+$/.test(e.message)?e.message:'service unavailable';console.error('Scan failed: '+safe+'. No credentials logged.');process.exitCode=1;}

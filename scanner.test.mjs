@@ -5,10 +5,10 @@ Date.now=()=>testNow;
 try{
   process.env.NODE_ENV='test';process.env.TELEGRAM_BOT_TOKEN='test-token';process.env.TELEGRAM_CHAT_ID='test-chat';process.env.GEMINI_API_KEY='test-key';
   process.env.MONITOR_WATCH_MS='0';process.env.MONITOR_REVIEW_PAUSE_MS='0';
-  for(const scenario of ['stale','rejected','unavailable','quiet','approved','held','late','binance','deliveryFail','over50','noTrigger','manyApproved','lowQuality','groqApproved','cloudThenLocal','closedSlotCloud','cloudHadAttempt','missingBenchmark','oppositeBenchmark']){
-    process.env.MONITOR_ORIGIN=['binance','manyApproved','cloudThenLocal','cloudHadAttempt'].includes(scenario)?'local':'github';process.env.GROQ_API_KEY=scenario==='groqApproved'?'test-groq':'';
-    Date.now=()=>testNow+(scenario==='late'?600000:0);
-    const now=Date.now(), end=now-(scenario==='stale'?240000:60000);
+  for(const scenario of ['stale','rejected','unavailable','quiet','approved','held','late','cloudLate','binance','deliveryFail','over50','noTrigger','manyApproved','lowQuality','groqApproved','cloudThenLocal','closedSlotCloud','cloudHadAttempt','missingBenchmark','oppositeBenchmark']){
+    process.env.MONITOR_ORIGIN=['late','binance','manyApproved','cloudThenLocal','cloudHadAttempt'].includes(scenario)?'local':'github';process.env.GROQ_API_KEY=scenario==='groqApproved'?'test-groq':'';
+    Date.now=()=>testNow+(['late','cloudLate'].includes(scenario)?600000:0);
+    const now=Date.now(), end=now-(scenario==='stale'?960000:scenario==='cloudLate'?660000:60000);
     const candles=Array.from({length:20},(_,i)=>({time:end-899999-(21-i)*900000,high:100,low:98,close:99,volume:100}));
     candles.push({time:end-899999-900000,high:102,low:99,close:101,volume:scenario==='lowQuality'?160:300},{time:end-899999,high:101,low:99.8,close:100.5,volume:100});
     {const oldest=candles[0].time;candles.unshift(...Array.from({length:18},(_,i)=>({time:oldest-(18-i)*900000,high:98,low:96,close:97,volume:100})));}
@@ -45,6 +45,7 @@ try{
     if(['held','late','closedSlotCloud','cloudHadAttempt'].includes(scenario)){assert.equal(saved,undefined,'losing or late runner must not overwrite shared quota');assert.equal(aiCalls,0);assert.equal(messages,0);assert.equal(marketReads,0);continue;}
     assert.equal(saved.scanned,scenario==='manyApproved'?8:['binance','cloudThenLocal'].includes(scenario)?3:2,'Binance includes thin markets; Kraken backup retains its threshold');
     if(scenario==='cloudThenLocal'){assert.match(claimedCaption,/local-followup$/);assert.equal(saved.completedSlot.provider,'binance-futures');}
+    if(scenario==='cloudLate'){assert.equal(saved.lastResult.sweepQueued,2);assert.equal(saved.completedSlot.slot,Math.floor(now/900000));}
     if(scenario==='binance'){assert.equal(saved.provider,'binance-futures');assert.equal(saved.lastRunner,'local');assert.equal(saved.lastResult.attempted,3);}
     assert.equal(saved.lastResult.sent,0,'Discovery scanner must no longer send direct entries');assert.equal(signals,0);assert.equal(saved.sweepStateMessageId,321);
     if(scenario!=='stale'){assert.ok(Object.keys(saved.sweepSeeds||{}).length>0);assert.ok(Object.values(saved.sweepSeeds).every(s=>s.version==='sweep-reclaim-v9'&&s.level>0&&s.atr14>0));}
