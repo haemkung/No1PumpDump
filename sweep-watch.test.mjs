@@ -6,8 +6,11 @@ import {join,resolve,sep} from 'node:path';import {pathToFileURL,fileURLToPath} 
 import {runSweepWatch} from './sweep-watch.mjs';
 const testRoot=fileURLToPath(new URL('./.sweep/',import.meta.url));await mkdir(testRoot,{recursive:true});
 const t=Math.floor(Date.now()/60000)*60000,now=t+10000,baseSeed={id:'seed',version:'sweep-reclaim-v9',provider:'binance-futures',symbol:'TESTUSDT',side:'SHORT',seededAt:new Date(t-180000).toISOString(),level:100,atr14:2,quality:{total:90},features:{volumeRatio:3,closeStrength:.7}};
-for(const scenario of ['fastReversal','mlTie','momentum','approved','groqApproved','rejected','deliveryUnknown','oppositeBTC','stale','gap','postPrice','held']){
+for(const testCase of ['fastReversalGap','fastReversalBlocked','fastReversal','mlTie','momentum','approved','groqApproved','rejected','deliveryUnknown','oppositeBTC','stale','gap','postPrice','held']){
+ const scenario=testCase.startsWith('fastReversal')?'fastReversal':testCase;
+ const blocked=testCase==='fastReversalBlocked';
  const folder=await mkdtemp(join(testRoot,'test-')),dir=pathToFileURL(folder+'/watch/');let state={watch:{},done:{},journal:{},count:0},caption=null,sends=0,ai=0,quotes=0;
+ if(testCase==='fastReversalGap'||blocked)state.lastAttemptAt=new Date(now-(blocked?59999:60000)).toISOString();
  if(scenario==='gap')state.lastAttemptAt=new Date(now-1000).toISOString();
  const seed=scenario==='stale'?{...baseSeed,seededAt:new Date(t-300000).toISOString()}:baseSeed;
  if(scenario==='mlTie'){
@@ -53,8 +56,9 @@ for(const scenario of ['fastReversal','mlTie','momentum','approved','groqApprove
  assert.ok(evidence.reclaimCandles.every(bar=>bar.close<100));}ai++;return response({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({approve:scenario!=='rejected',reason:'fixture',runnerPotential:'unclear',runnerReason:'fixture'})}]}}]});}
  throw Error('Unexpected isolated sweep request');};
  try{const options={env:{TELEGRAM_BOT_TOKEN:'test-token',TELEGRAM_CHAT_ID:'test-chat',GEMINI_API_KEY:'test-key',GROQ_API_KEY:scenario==='groqApproved'?'test-groq':'',MONITOR_ORIGIN:'local',NO1_FAST_REVERSAL:scenario==='fastReversal'?'1':'0'},fetchImpl,clock:()=>now,dir};const result=await runSweepWatch(options);
- const delivery=['fastReversal','mlTie','momentum','approved','groqApproved','deliveryUnknown'].includes(scenario);assert.equal(sends,delivery?1:0);assert.equal(ai,['fastReversal','mlTie','momentum','approved','groqApproved','rejected','deliveryUnknown','postPrice'].includes(scenario)?1:0);
+ const delivery=!blocked&&['fastReversal','mlTie','momentum','approved','groqApproved','deliveryUnknown'].includes(scenario);assert.equal(sends,delivery?1:0);assert.equal(ai,!blocked&&['fastReversal','mlTie','momentum','approved','groqApproved','rejected','deliveryUnknown','postPrice'].includes(scenario)?1:0);
  if(delivery){const record=Object.values(state.journal)[0];assert.equal(record.strategyVersion,scenario==='fastReversal'?'fast-reversal-v1':scenario==='momentum'?'momentum-v1':'sweep-reclaim-v9');assert.equal(record.status,['fastReversal','mlTie','momentum','approved','groqApproved'].includes(scenario)?'sent':'delivery_unknown');assert.ok(state.lastAttemptAt);if(scenario==='fastReversal'){assert.equal(result.fastReversalChecked,1);assert.equal(result.fastReversalConfirmed,1);assert.equal(record.side,'LONG');assert.equal(record.stop,undefined);assert.equal(record.target,undefined);}else assert.equal(state.done[scenario==='mlTie'?'second':'seed'].status,'delivery_attempted');if(scenario==='mlTie'){assert.equal(record.symbol,'SECONDUSDT');assert.equal(record.mlExperimental.mode,'live_tiebreak');assert.equal(result.mlReordered,true);}}
+ if(blocked){assert.equal(result.fastReversalChecked,1);assert.equal(result.fastReversalConfirmed,1);assert.equal(result.cooldownBlocked,1);}
  if(scenario==='rejected'){assert.equal(state.done.seed.review.reason,'fixture');assert.ok(state.done.seed.review.model);}
  if(scenario==='held')assert.equal(result.skipped,true);
  if(scenario==='approved'){const again=await runSweepWatch(options);assert.equal(again.skipped,true);assert.equal(sends,1,'Same minute must not deliver twice');}

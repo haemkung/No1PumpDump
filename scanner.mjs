@@ -1,3 +1,4 @@
+import {publicWatchlist} from './public-watchlist.mjs';
 import {momentumWatchMs} from './momentum.mjs';
 import {sweepRules} from './sweep-reclaim.mjs';
 import {entryFeatureVector} from './entry-model-features.mjs';
@@ -49,6 +50,9 @@ async function claimSlot(){
   slotCaption=caption;claimedSlot=slot;ownsSlot=true;deadline=Math.min(Date.now()+240000,slotDeadline);return true;
 }
 async function save(){
+  if(provider==='binance-futures'&&process.env.NODE_ENV!=='test'){
+    try{const feed=publicWatchlist(JSON.parse(await readFile(new URL('./.sweep/state.json',import.meta.url),'utf8')));if(feed)state.publicWatchlist=feed;}catch{/* Keep the last timestamped summary if local data is unavailable. */}
+  }
   const form=new FormData();
   form.set('chat_id',chat);form.set('message_id',String(state.messageId));
   const {messageId,...data}=state;

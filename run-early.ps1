@@ -9,5 +9,7 @@ try{
   $groqPath=Join-Path $secretDir 'groq.xml'
   if(Test-Path -LiteralPath $groqPath){$env:GROQ_API_KEY=[Net.NetworkCredential]::new('',(Import-Clixml -LiteralPath $groqPath)).Password}
   $env:MONITOR_ORIGIN='local'
-  & $node (Join-Path $PSScriptRoot 'sweep-watch.mjs');if($LASTEXITCODE -ne 0){throw 'Early watch deferred'}
+  & $node (Join-Path $PSScriptRoot 'sweep-watch.mjs');$watchExit=$LASTEXITCODE
+  & $node (Join-Path $PSScriptRoot 'fast-learning.mjs')
+  if($watchExit -ne 0){throw 'Early watch deferred'}
 }finally{Remove-Item Env:TELEGRAM_BOT_TOKEN,Env:TELEGRAM_CHAT_ID,Env:GEMINI_API_KEY,Env:GROQ_API_KEY,Env:MONITOR_ORIGIN -ErrorAction SilentlyContinue;$mutex.ReleaseMutex();$mutex.Dispose()}

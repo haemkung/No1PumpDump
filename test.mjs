@@ -1,4 +1,5 @@
 import './sweep-reclaim.test.mjs';
+import './fast-learning.test.mjs';
 import './sweep-watch.test.mjs';
 import './rule-comparison.test.mjs';
 import './entry-plan.test.mjs';
