@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {qualityFeatures,qualityScore,qualityNames,qualityShadow,qualitySummary} from './fast-quality.mjs';
+const c={volumeRatio:3,recovery:.6,reversalFlow:.7,shockCandle:{quoteVolume:100},bounceCandle:{quoteVolume:80}};
+assert.equal(qualityFeatures({side:'LONG',level:100},c,101)[5],1);
+assert.ok(Math.abs(qualityFeatures({side:'SHORT',level:100},c,99)[0]-1)<1e-9);
+assert.equal(qualityFeatures({side:'LONG',level:0},c,101),null);
+const model={featureNames:qualityNames,mean:Array(6).fill(0),scale:Array(6).fill(1),weights:Array(6).fill(0),bias:0};
+assert.equal(qualityScore(model,[1,1,.7,1,1,1]),.5);assert.equal(qualityScore(model,[NaN,1,.7,1,1,1]),null);
+const policy={version:'fast-quality-study-v1',frozenAt:'2026-11-09',model,rules:[{id:'test',feature:'reversalFlow',operator:'gte',threshold:.65}]};
+const shadow=qualityShadow({side:'LONG',level:100},c,101,policy);
+assert.equal(shadow.decisions.test,true);assert.equal(shadow.affectsLiveSelection,false);assert.equal(shadow.calibrated,false);
+assert.equal(qualityShadow({side:'LONG',level:100},c,101,null).available,false);
+const t=1800000000000,r={symbol:'X',cohort:'prospective_candidate',observedAt:new Date(t).toISOString(),initialAssessment:{pass:true},qualityShadow:shadow,outcomes:{5:{maturedAt:t+300000,directionalClosePct:1}}};
+assert.equal(qualitySummary({a:r},t+1).baseline[5].n,0);
+assert.equal(qualitySummary({a:r},t+300000).rules.test[5].kept.positiveNet,1);
+assert.equal(qualitySummary({a:r,b:{...r,observedAt:new Date(t+60000).toISOString()}},t+400000).distinctCases,1);
+assert.equal(qualitySummary({a:{...r,initialAssessment:{pass:false}}},t+400000).distinctCases,0);
+console.log('Quality shadow passed: causal features, both sides, invalid inputs, no live effect, maturity and overlap');

@@ -1,0 +1,81 @@
+{
+  "version": "fast-quality-study-v1",
+  "frozenAt": "2026-11-09T05:53:39.533Z",
+  "trainingMonths": [
+    "2026-08",
+    "2026-09"
+  ],
+  "developmentMonths": [
+    "2026-10"
+  ],
+  "externalMonth": "2026-07",
+  "mode": "shadow",
+  "affectsLiveSelection": false,
+  "calibrated": false,
+  "model": {
+    "algorithm": "L2-logistic-regression",
+    "featureNames": [
+      "extensionPct",
+      "recovery",
+      "reversalFlow",
+      "logVolumeRatio",
+      "logBounceVolumeRatio",
+      "isLong"
+    ],
+    "mean": [
+      1.56056296371781,
+      1.0356667395111019,
+      0.6857178350757124,
+      2.018212512078248,
+      -0.8248825009742774,
+      0.7005347593582903
+    ],
+    "scale": [
+      2.0614713100395976,
+      0.6512914144203276,
+      0.06972322906470563,
+      0.7742711571053714,
+      0.6038416777229428,
+      0.4580238097404031
+    ],
+    "weights": [
+      0.1375132361663407,
+      -0.05608220680520869,
+      0.04079565637251586,
+      0.09343031173882148,
+      0.03107092810447331,
+      0.21886154827487483
+    ],
+    "bias": 0.0757464178093681
+  },
+  "rules": [
+    {
+      "id": "extension_tail",
+      "feature": "extensionPct",
+      "operator": "lte",
+      "threshold": 2.065458988525304
+    },
+    {
+      "id": "weak_flow_tail",
+      "feature": "reversalFlow",
+      "operator": "gte",
+      "threshold": 0.6241570468285184
+    },
+    {
+      "id": "ml_bottom_tail",
+      "feature": "score",
+      "operator": "gte",
+      "threshold": 0.45515473476617013
+    }
+  ],
+  "acceptance": {
+    "minimumExternal": 50,
+    "minimumRejected": 15,
+    "minGoodRetention": 0.8,
+    "minBadReduction": 0.1,
+    "minSideGoodRetention": 0.75,
+    "requiresFutureShadow": true,
+    "requiresDevelopmentPass": true
+  },
+  "limitations": "Historical executable-price proxy; no AI, actual spread, latency or funding replay. July is earlier external history, not a forward test. No automatic deployment."
+}

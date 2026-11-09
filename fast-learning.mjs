@@ -1,3 +1,4 @@
+import {qualitySummary} from './fast-quality.mjs';
 import {compare,report} from './fast-comparison.mjs';
 import {readFile,writeFile,mkdir,rename} from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
@@ -75,6 +76,7 @@ export async function update({dir=new URL('./.ml/',import.meta.url),stateUrl=new
  const comparison=compare(observed,now,await read('fast-policy-comparison.json',{}));
  await save('fast-policy-comparison.json',comparison);
  await writeFile(new URL('fast-policy-report.md',dir),report(comparison));
+ await save('fast-quality-forward.json',qualitySummary(observed,now));
  const matured=Object.values(records).filter(r=>r.outcomes[5]).length;
  const runtime={checkedAt:new Date(now).toISOString(),records:Object.keys(records).length,candidateRecords:Object.keys(observed).length,matured,attempted,failed,status:model?'shadow_trained':'collecting',affectsLiveSelection:false};
  await save('fast-runtime.json',runtime);console.log(JSON.stringify(runtime));
