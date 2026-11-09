@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import {outcome,train,vector,historicalEvidence} from './fast-learning.mjs';
+import {outcome,train,vector,historicalEvidence,update} from './fast-learning.mjs';
+import {mkdtemp,mkdir,readFile,writeFile,rm} from 'node:fs/promises';
+import {fileURLToPath,pathToFileURL} from 'node:url';
+import {resolve,sep} from 'node:path';
 const t=1800000000000,start=t+60000;
 const r={status:'sent',sentAt:new Date(t+20000).toISOString(),entry:100,side:'LONG',sweepConfirmation:{volumeRatio:3,recovery:.7,shockFlow:.7,reversalFlow:.8}};
 const rows=Array.from({length:6},(_,i)=>[t+i*60000,100,i===0?500:102,99,101,0,t+i*60000+59999]);
@@ -22,4 +25,20 @@ assert.equal(evidence.horizons[5].count,1);
 assert.equal(evidence.horizons[5].nonPositiveClose,1);
 assert.equal(evidence.horizons[30].count,0);
 assert.equal(evidence.recentCases[0].outcomes[30],undefined);
+const observedSamples=Object.fromEntries(Object.entries(records).map(([id,row])=>[id,{...row,status:'observed',observedAt:row.sentAt,sentAt:undefined}]));
+assert.equal(train(observedSamples,t+40*600000),null,'Observed candidates must not enter delivered model');
+assert.equal(train(observedSamples,t+40*600000,{cohort:'observed'}).trainingCount,40);
+const root=fileURLToPath(new URL('./.sweep/',import.meta.url));await mkdir(root,{recursive:true});
+const folder=await mkdtemp(resolve(root,'learning-test-'));
+try{
+ const stateUrl=pathToFileURL(resolve(folder,'state.json')),dir=pathToFileURL(folder+'/learning/');
+ const candidate={...r,id:'candidate',status:'observed',sentAt:undefined,observedAt:r.sentAt,provider:'binance-futures',initialAssessment:{reason:'opposing_btc_trend',btcContextChallenger:{pass:true}}};
+ await writeFile(stateUrl,JSON.stringify({journal:{},fastAssessments:{candidate}}));
+ await update({dir,stateUrl,now:start+300000,fetchImpl:async()=>new Response(JSON.stringify(rows))});
+ const stored=JSON.parse(await readFile(new URL('fast-candidate-records.json',dir),'utf8'));
+ assert.equal(stored.candidate.sentAt,undefined);assert.ok(stored.candidate.outcomes[5]);
+ assert.deepEqual(JSON.parse(await readFile(new URL('fast-records.json',dir),'utf8')),{});
+ const comparison=JSON.parse(await readFile(new URL('fast-policy-comparison.json',dir),'utf8'));
+ assert.equal(comparison.results[5].matured,1);assert.equal(comparison.results[30].matured,0);assert.equal(comparison.affectsLiveSelection,false);
+}finally{assert.ok(resolve(folder).startsWith(resolve(root)+sep));await rm(folder,{recursive:true,force:true});}
 console.log('Fast learning passed: no partial-minute leakage, maturity, missing bars, both sides and chronological holdout');

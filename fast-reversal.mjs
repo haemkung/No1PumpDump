@@ -68,18 +68,33 @@ export async function scanFastReversals(symbols, {fetchImpl, clock, until, candl
 }
 
 export function fastReversalEntry(seed, confirmation, bid, ask, context, benchmark, now) {
-  const age=now-confirmation.confirmedAt;
-  if(confirmation.status!=='confirmed' || age<0 || age>fastReversalFreshMs)
-    return {pass:false,reason:'stale_confirmation'};
-  if(!context?.available || !benchmark?.available)
-    return {pass:false,reason:'missing_current_context'};
-  if(![bid,ask].every(Number.isFinite) || bid<=0 || ask<bid || (ask-bid)/bid>.001)
-    return {pass:false,reason:'quote_spread'};
-  const direction=seed.side==='LONG'?1:-1;
-  const entry=direction===1?ask:bid;
-  if(direction*(entry-seed.level)<=0 || Math.abs(entry/confirmation.reference-1)>.003)
-    return {pass:false,reason:'reclaim_lost_or_chase'};
-  if(benchmark.direction===-direction)
-    return {pass:false,reason:'opposing_btc_trend'};
-  return {pass:true,entry,spreadRatio:(ask-bid)/bid};
+  const direction=seed.side==='LONG'?1:-1,entry=direction===1?ask:bid;
+  const validQuote=[bid,ask].every(Number.isFinite)&&bid>0&&ask>=bid;
+  const diagnostics={assessedAt:now,bid,ask,entry,level:seed.level,reference:confirmation.reference,
+    ageMs:now-confirmation.confirmedAt,spreadRatio:validQuote?(ask-bid)/bid:null,
+    referenceDrift:Number.isFinite(entry)&&confirmation.reference>0?Math.abs(entry/confirmation.reference-1):null,
+    benchmarkDirection:benchmark?.direction??null,coinDirection:context?.direction??null,
+    policy:'fast-quote-retry-v2',btcPolicy:'veto_with_context_challenger'};
+  const reject=reason=>({pass:false,reason,diagnostics});
+  if(confirmation.status!=='confirmed'||diagnostics.ageMs<0||diagnostics.ageMs>fastReversalFreshMs)return reject('stale_confirmation');
+  if(!context?.available||!benchmark?.available)return reject('missing_current_context');
+  if(!validQuote)return reject('invalid_quote');
+  if(diagnostics.spreadRatio>.001)return reject('quote_spread');
+  if(direction*(entry-seed.level)<=0)return reject('reclaim_lost');
+  if(diagnostics.referenceDrift>.003)return reject('reference_drift');
+  if(benchmark.direction===-direction)return {...reject('opposing_btc_trend'),btcContextChallenger:{pass:true,mode:'shadow',affectsLiveSelection:false,entry}};
+  return {pass:true,entry,spreadRatio:diagnostics.spreadRatio,diagnostics,btcContextChallenger:{pass:true,mode:'shadow',affectsLiveSelection:false,entry}};
+}
+
+export async function checkFastQuote({seed,confirmation,context,benchmark,quote,clock,deadline,sleep=ms=>new Promise(r=>setTimeout(r,ms)),initialBook}){
+ const attempts=[];let book=initialBook??await quote();
+ for(let i=0;i<3;i++){
+  const result=fastReversalEntry(seed,confirmation,Number(book.bidPrice),Number(book.askPrice),context,benchmark,clock());
+  attempts.push({at:clock(),...result});
+  if(result.reason!=='quote_spread'||i===2||clock()+10400>=deadline||clock()+400>=confirmation.confirmedAt+fastReversalFreshMs)return {...result,quoteAttempts:attempts};
+  await sleep(350);
+  // A new quote must pass all checks; recovery of the spread never bypasses price or freshness.
+  if(clock()+10000>=deadline||clock()>=confirmation.confirmedAt+fastReversalFreshMs)return {...fastReversalEntry(seed,confirmation,Number(book.bidPrice),Number(book.askPrice),context,benchmark,clock()),quoteAttempts:attempts};
+  try{book=await quote();}catch{return {pass:false,reason:'quote_unavailable',diagnostics:attempts.at(-1).diagnostics,quoteAttempts:attempts};}
+ }
 }

@@ -20,7 +20,7 @@ export function vector(r){
 }
 // Exclude the partially elapsed delivery minute: its high/low may predate delivery.
 export function outcome(r,rows,minutes,now){
- const start=Math.ceil(Date.parse(r.sentAt)/60000)*60000,end=start+minutes*60000;
+ const start=Math.ceil(Date.parse(r.sentAt??r.observedAt)/60000)*60000,end=start+minutes*60000;
  if(!Number.isFinite(start)||now<end||!(r.entry>0))return null;
  const bars=rows.filter(b=>Number(b[0])>=start&&Number(b[0])<end);
  if(bars.length!==minutes||bars.some((b,i)=>Number(b[0])!==start+i*60000||Number(b[6])!==Number(b[0])+59999||![2,3,4].every(j=>Number.isFinite(Number(b[j]))&&Number(b[j])>0)))return null;
@@ -28,16 +28,16 @@ export function outcome(r,rows,minutes,now){
  return {windowStart:start,maturedAt:end,directionalClosePct:d*(Number(bars.at(-1)[4])/r.entry-1)*100,favorablePct:Math.max(0,...returns),adversePct:Math.min(0,...returns),partialDeliveryMinuteExcluded:true};
 }
 const probability=(m,x)=>1/(1+Math.exp(-Math.max(-30,Math.min(30,m.bias+x.reduce((sum,v,i)=>sum+m.weights[i]*(v-m.mean[i])/m.scale[i],0)))));
-export function train(records,now){
- const samples=Object.values(records).filter(r=>r.status==='sent'&&r.outcomes?.[5]?.maturedAt<=now&&vector(r)).sort((a,b)=>Date.parse(a.sentAt)-Date.parse(b.sentAt));
+export function train(records,now,{horizon=5,cohort="sent"}={}){
+ const samples=Object.values(records).filter(r=>r.status===cohort&&r.outcomes?.[horizon]?.maturedAt<=now&&Number.isFinite(r.outcomes[horizon].directionalClosePct)&&vector(r)).sort((a,b)=>Date.parse(a.sentAt??a.observedAt)-Date.parse(b.sentAt??b.observedAt));
  if(samples.length<40)return null;
- const split=Math.floor(samples.length*.75),test=samples.slice(split),past=samples.slice(0,split).filter(r=>r.outcomes[5].maturedAt<=Date.parse(test[0].sentAt));
- const convert=r=>({x:vector(r),y:Number(r.outcomes[5].directionalClosePct>0)}),training=past.map(convert);
+ const split=Math.floor(samples.length*.75),test=samples.slice(split),past=samples.slice(0,split).filter(r=>r.outcomes[horizon].maturedAt<=Date.parse(test[0].sentAt??test[0].observedAt));
+ const convert=r=>({x:vector(r),y:Number(r.outcomes[horizon].directionalClosePct>0)}),training=past.map(convert);
  if(training.length<20||new Set(training.map(s=>s.y)).size<2)return null;
  const model=fit(training,names),prior=training.reduce((s,r)=>s+r.y,0)/training.length;
  const brier=test.reduce((s,r)=>s+(probability(model,vector(r))-convert(r).y)**2,0)/test.length;
  const baselineBrier=test.reduce((s,r)=>s+(prior-convert(r).y)**2,0)/test.length;
- return {...fit(samples.map(convert),names),trainedAt:new Date(now).toISOString(),trainingCount:samples.length,mode:'shadow',affectsLiveSelection:false,calibrated:false,target:'Positive directional close after five full post-delivery minutes, before fees; not profitability',temporalTest:{n:test.length,trainingCount:training.length,brier,baselineBrier},trainedThrough:samples.at(-1).sentAt};
+ return {...fit(samples.map(convert),names),trainedAt:new Date(now).toISOString(),trainingCount:samples.length,mode:'shadow',affectsLiveSelection:false,calibrated:false,cohort,horizonMinutes:horizon,target:`Positive directional close after ${horizon} full minutes following ${cohort==='sent'?'delivery':'candidate observation'}, before fees; not profitability`,temporalTest:{n:test.length,trainingCount:training.length,brier,baselineBrier},trainedThrough:samples.at(-1).sentAt??samples.at(-1).observedAt};
 }
 export async function update({dir=new URL('./.ml/',import.meta.url),stateUrl=new URL('./.sweep/state.json',import.meta.url),fetchImpl=fetch,now=Date.now()}={}){
  await mkdir(dir,{recursive:true});
@@ -47,12 +47,15 @@ export async function update({dir=new URL('./.ml/',import.meta.url),stateUrl=new
  for(const r of Object.values(state.journal||{}))if(r.strategyVersion==='fast-reversal-v1'&&r.status==='sent'&&r.provider==='binance-futures'&&vector(r))records[r.id]={...records[r.id],...r,outcomes:records[r.id]?.outcomes||{}};
  for(const r of Object.values(records))if(r.outcomes?.[5]&&r.outcomes?.[30])r.learningNote={kind:r.outcomes[5].directionalClosePct<=0&&r.outcomes[30].directionalClosePct>0?'delayed_follow_through':'measured_multi_horizon',note:'Keep five-minute and thirty-minute outcomes separate. Do not label a later rise as immediate follow-through.',basedOnMinutes:[5,30]};
  await save('fast-records.json',records);
+ const observed=await read('fast-candidate-records.json',{});
+ for(const r of Object.values(state.fastAssessments||{}))if(r.provider==='binance-futures'&&vector(r)&&Number.isFinite(r.entry)&&r.entry>0)observed[r.id]={...observed[r.id],...r,outcomes:observed[r.id]?.outcomes||{}};
+ await save('fast-candidate-records.json',observed);
  const previous=await read('fast-runtime.json',{});
  if(now-Date.parse(previous.checkedAt)<300000)return;
  let attempted=0,failed=0;
  const deadline=Date.now()+12000;
- for(const r of Object.values(records).sort((a,b)=>(a.lastEvaluationAttempt||0)-(b.lastEvaluationAttempt||0))){
-  const start=Math.ceil(Date.parse(r.sentAt)/60000)*60000;
+ for(const r of [...Object.values(records),...Object.values(observed)].sort((a,b)=>(a.lastEvaluationAttempt||0)-(b.lastEvaluationAttempt||0))){
+  const start=Math.ceil(Date.parse(r.sentAt??r.observedAt)/60000)*60000;
   const due=[5,30,240].filter(m=>!r.outcomes[m]&&now>=start+m*60000);
   if(!due.length||attempted>=4||Date.now()>=deadline)continue;
   attempted++;r.lastEvaluationAttempt=now;
@@ -65,9 +68,13 @@ export async function update({dir=new URL('./.ml/',import.meta.url),stateUrl=new
   }catch{failed++;}
  }
  await save('fast-records.json',records);
+ await save('fast-candidate-records.json',observed);
  const model=train(records,now);if(model)await save('fast-model.json',model);
+ for(const horizon of [5,30,240]){const candidateModel=train(observed,now,{horizon,cohort:'observed'});if(candidateModel)await save(`fast-candidate-model-${horizon}m.json`,candidateModel);}
+ const btcCases=Object.values(observed).filter(r=>r.initialAssessment?.reason==='opposing_btc_trend'&&r.initialAssessment?.btcContextChallenger?.pass);
+ await save('fast-policy-comparison.json',{checkedAt:new Date(now).toISOString(),mode:'prospective_shadow',affectsLiveSelection:false,btcContextCandidates:btcCases.length,results:Object.fromEntries([5,30,240].map(m=>{const a=btcCases.filter(r=>r.outcomes?.[m]?.maturedAt<=now);return [m,{matured:a.length,positiveClose:a.filter(r=>r.outcomes[m].directionalClosePct>0).length,nonPositiveClose:a.filter(r=>r.outcomes[m].directionalClosePct<=0).length,meanAdversePct:a.length?a.reduce((s,r)=>s+r.outcomes[m].adversePct,0)/a.length:null}]}))});
  const matured=Object.values(records).filter(r=>r.outcomes[5]).length;
- const runtime={checkedAt:new Date(now).toISOString(),records:Object.keys(records).length,matured,attempted,failed,status:model?'shadow_trained':'collecting',affectsLiveSelection:false};
+ const runtime={checkedAt:new Date(now).toISOString(),records:Object.keys(records).length,candidateRecords:Object.keys(observed).length,matured,attempted,failed,status:model?'shadow_trained':'collecting',affectsLiveSelection:false};
  await save('fast-runtime.json',runtime);console.log(JSON.stringify(runtime));
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)update().catch(()=>{console.error('Fast learning update deferred; existing files retained');process.exitCode=1;});

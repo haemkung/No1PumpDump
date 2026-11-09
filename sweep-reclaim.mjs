@@ -19,7 +19,9 @@ export function sweepEntry(seed,confirmation,bid,ask,context,benchmark,now=Date.
  if(!context?.available||!benchmark?.available)return {pass:false,reason:'missing_current_context'};
  const dir=seed.side==='LONG'?1:-1,entry=dir===1?ask:bid,risk=dir*(entry-confirmation.stop),spread=ask-bid;
  if(![bid,ask].every(Number.isFinite)||!(bid>0&&ask>=bid&&risk>0)||risk/entry<.003||risk/entry>.03||spread/bid>.001||spread/risk>.1)return {pass:false,reason:'quote_stop_or_cost'};
- if(!(dir*(entry-seed.level)>0)||Math.abs(entry-confirmation.reference)/confirmation.reference>.003||Math.abs(entry-confirmation.reference)/risk>.2)return {pass:false,reason:'reclaim_lost_or_chase'};
+ if(!(dir*(entry-seed.level)>0))return {pass:false,reason:'reclaim_lost'};
+ if(Math.abs(entry-confirmation.reference)/confirmation.reference>.003)return {pass:false,reason:'reference_drift'};
+ if(Math.abs(entry-confirmation.reference)/risk>.2)return {pass:false,reason:'risk_reference_drift'};
  const relative=dir*(context.return30m-benchmark.return30m);
  if(!Number.isFinite(relative))return {pass:false,reason:'missing_current_context'};
  if(benchmark.direction===-dir)return {pass:false,reason:'opposing_btc_trend'};

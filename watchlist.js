@@ -1,5 +1,5 @@
 (()=>{
-const reasons={reclaim_lost_or_chase:'เสียระดับยืนยันหรือราคาไกลเกินเกณฑ์',quote_stop_or_cost:'ไม่ผ่านเกณฑ์ราคา ระยะ Stop หรือต้นทุน',opposing_btc_trend:'สวนแนวโน้ม BTC',post_ai_price_or_freshness:'ราคาเปลี่ยนหรือสัญญาณเก่าหลังตรวจ AI',ai_rejected:'AI ยังไม่ยืนยัน',expired_reclaim:'หมดเวลารอยืนยัน',expired_watch:'หมดเวลาเฝ้ารอ',stale_confirmation:'ข้อมูลยืนยันเก่า',quote_spread:'ส่วนต่างซื้อขายไม่ผ่าน',missing_current_context:'ข้อมูลปัจจุบันไม่ครบ'};
+const reasons={reclaim_lost:'ราคาเสียฐานยืนยัน',reference_drift:'ราคาไกลจากแท่งยืนยันเกิน 0.3%',risk_reference_drift:'ราคาเปลี่ยนเกินระยะที่แผนเดิมยอมรับ',quote_unavailable:'อ่านราคาซื้อขายซ้ำไม่ได้',invalid_quote:'ราคาซื้อขายไม่สมบูรณ์',reclaim_lost_or_chase:'เสียระดับยืนยันหรือราคาไกลเกินเกณฑ์',quote_stop_or_cost:'ไม่ผ่านเกณฑ์ราคา ระยะ Stop หรือต้นทุน',opposing_btc_trend:'สวนแนวโน้ม BTC',post_ai_price_or_freshness:'ราคาเปลี่ยนหรือสัญญาณเก่าหลังตรวจ AI',ai_rejected:'AI ยังไม่ยืนยัน',expired_reclaim:'หมดเวลารอยืนยัน',expired_watch:'หมดเวลาเฝ้ารอ',stale_confirmation:'ข้อมูลยืนยันเก่า',quote_spread:'ส่วนต่างซื้อขายไม่ผ่าน',missing_current_context:'ข้อมูลปัจจุบันไม่ครบ'};
 const el=id=>document.getElementById(id),fmt=t=>new Date(t).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'});let busy=false;
 async function update(){if(busy)return;busy=true;try{
  let data,local=false;
