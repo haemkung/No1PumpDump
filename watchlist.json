@@ -1,7 +1,49 @@
 {
   "version": 1,
-  "checkedAt": "2026-11-09T03:00:18.414Z",
+  "checkedAt": "2026-11-09T04:16:10.669Z",
   "items": [
+    {
+      "symbol": "SAFEUSDT",
+      "side": "LONG",
+      "market": "Binance Futures",
+      "at": "2026-11-09T04:08:18.783Z",
+      "reason": "opposing_btc_trend"
+    },
+    {
+      "symbol": "AKEUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-09T04:04:10.856Z",
+      "reason": "reclaim_lost_or_chase"
+    },
+    {
+      "symbol": "TRUTHUSDT",
+      "side": "LONG",
+      "market": "Binance Futures",
+      "at": "2026-11-09T04:03:23.090Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "ONUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-09T04:00:18.667Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "STABLEUSDT",
+      "side": "LONG",
+      "market": "Binance Futures",
+      "at": "2026-11-09T03:58:10.614Z",
+      "reason": "opposing_btc_trend"
+    },
+    {
+      "symbol": "METUSDT",
+      "side": "LONG",
+      "market": "Binance Futures",
+      "at": "2026-11-09T03:10:10.834Z",
+      "reason": "reclaim_lost_or_chase"
+    },
     {
       "symbol": "ZAMAUSDT",
       "side": "LONG",
@@ -379,48 +421,6 @@
       "market": "Binance Futures",
       "at": "2026-11-08T19:47:17.880Z",
       "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "TAUSDT",
-      "side": "SHORT",
-      "market": "Binance Futures",
-      "at": "2026-11-08T19:35:11.451Z",
-      "reason": "reclaim_lost_or_chase"
-    },
-    {
-      "symbol": "EVAAUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-08T19:33:19.000Z",
-      "reason": "reclaim_lost_or_chase"
-    },
-    {
-      "symbol": "ARXUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-08T19:10:22.530Z",
-      "reason": "ai_rejected"
-    },
-    {
-      "symbol": "HANAUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-08T19:03:11.081Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "ARXUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-08T18:49:18.418Z",
-      "reason": "reclaim_lost_or_chase"
-    },
-    {
-      "symbol": "NAORISUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-08T18:46:15.988Z",
-      "reason": "expired_watch"
     }
   ]
 }
