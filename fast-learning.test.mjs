@@ -32,7 +32,7 @@ const root=fileURLToPath(new URL('./.sweep/',import.meta.url));await mkdir(root,
 const folder=await mkdtemp(resolve(root,'learning-test-'));
 try{
  const stateUrl=pathToFileURL(resolve(folder,'state.json')),dir=pathToFileURL(folder+'/learning/');
- const candidate={...r,id:'candidate',status:'observed',sentAt:undefined,observedAt:r.sentAt,provider:'binance-futures',initialAssessment:{reason:'opposing_btc_trend',btcContextChallenger:{pass:true}}};
+ const candidate={...r,id:'candidate',cohort:'prospective_candidate',status:'observed',sentAt:undefined,observedAt:r.sentAt,provider:'binance-futures',initialAssessment:{reason:'opposing_btc_trend',btcContextChallenger:{pass:true}}};
  await writeFile(stateUrl,JSON.stringify({journal:{},fastAssessments:{candidate}}));
  await update({dir,stateUrl,now:start+300000,fetchImpl:async()=>new Response(JSON.stringify(rows))});
  const stored=JSON.parse(await readFile(new URL('fast-candidate-records.json',dir),'utf8'));

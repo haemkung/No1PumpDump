@@ -1,3 +1,4 @@
+import './fast-comparison.test.mjs';
 import './sweep-reclaim.test.mjs';
 import './fast-learning.test.mjs';
 import './fast-policy.test.mjs';
