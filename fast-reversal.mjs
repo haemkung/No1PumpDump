@@ -31,14 +31,14 @@ export function fastReversal(symbol, rows, now) {
   const recovery=direction*(bounce.close-shock.close)/Math.abs(shock.open-shock.close);
   if(direction*(level-extreme)/level<.002 || direction*(bounceExtreme-extreme)<=0 ||
      direction*(bounce.close-level)<=0 || direction*(bounce.close-bounce.open)<=0 ||
-     recovery<.5 || shockFlow<.6 || reversalFlow<.6)return null;
+     recovery<.5 || shockFlow<.55 || reversalFlow<.6)return null;
 
   return {
     seed:{id:`fast-reversal-v1-${symbol}-${shock.time}`,mode:'fast-reversal',provider:'binance-futures',
       symbol,side,level,isBenchmark:symbol==='BTCUSDT',sourceTimeframe:'1m',
       features:{volumeRatio,closeStrength:reversalFlow}},
     confirmation:{status:'confirmed',confirmedAt:bounce.end,reference:bounce.close,
-      shockCandle:shock,bounceCandle:bounce,priorRangeLevel:level,volumeRatio,recovery,shockFlow,reversalFlow}
+      shockCandle:shock,bounceCandle:bounce,priorRangeLevel:level,volumeRatio,recovery,shockFlow,reversalFlow,ruleRevision:'shock55-bounce60-v2'}
   };
 }
 

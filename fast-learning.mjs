@@ -4,8 +4,8 @@ import {readFile,writeFile,mkdir,rename} from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
 import {fit} from './ml-model.mjs';
 export const names=['logShockVolume','recovery','shockFlow','reversalFlow','isLong'];
-export function historicalEvidence(records,side,now){
- const cases=Object.values(records||{}).filter(r=>r.strategyVersion==='fast-reversal-v1'&&r.provider==='binance-futures'&&r.status==='sent'&&r.side===side&&Date.parse(r.sentAt)<now&&vector(r));
+export function historicalEvidence(records,side,now,revision='shock60-bounce60-v1'){
+ const cases=Object.values(records||{}).filter(r=>r.strategyVersion==='fast-reversal-v1'&&r.provider==='binance-futures'&&r.status==='sent'&&(r.signalRuleRevision??'shock60-bounce60-v1')===revision&&r.side===side&&Date.parse(r.sentAt)<now&&vector(r));
  const horizons={};
  for(const minutes of [5,30,240]){
   const eligible=cases.filter(r=>r.outcomes?.[minutes]?.maturedAt<=now&&['directionalClosePct','favorablePct','adversePct'].every(k=>Number.isFinite(r.outcomes[minutes][k])));
@@ -71,12 +71,14 @@ export async function update({dir=new URL('./.ml/',import.meta.url),stateUrl=new
  }
  await save('fast-records.json',records);
  await save('fast-candidate-records.json',observed);
- const model=train(records,now);if(model)await save('fast-model.json',model);
- for(const horizon of [5,30,240]){const candidateModel=train(observed,now,{horizon,cohort:'observed'});if(candidateModel)await save(`fast-candidate-model-${horizon}m.json`,candidateModel);}
- const comparison=compare(observed,now,await read('fast-policy-comparison.json',{}));
- await save('fast-policy-comparison.json',comparison);
- await writeFile(new URL('fast-policy-report.md',dir),report(comparison));
- await save('fast-quality-forward.json',qualitySummary(observed,now));
+ let model=null;
+ for(const [revision,suffix] of [['shock60-bounce60-v1',''],['shock55-bounce60-v2','-shock55-v2']]){
+  const cohort=source=>Object.fromEntries(Object.entries(source).filter(([,r])=>(r.signalRuleRevision??'shock60-bounce60-v1')===revision));
+  const sent=cohort(records),candidates=cohort(observed),trained=train(sent,now);if(trained){await save(`fast-model${suffix}.json`,{...trained,signalRuleRevision:revision});if(suffix)model=trained;}
+  for(const horizon of [5,30,240]){const candidateModel=train(candidates,now,{horizon,cohort:'observed'});if(candidateModel)await save(`fast-candidate-model-${horizon}m${suffix}.json`,{...candidateModel,signalRuleRevision:revision});}
+  const filename=`fast-policy-comparison${suffix}.json`,comparison=compare(candidates,now,await read(filename,{}));comparison.signalRuleRevision=revision;await save(filename,comparison);await writeFile(new URL(`fast-policy-report${suffix}.md`,dir),report(comparison));
+  await save(`fast-quality-forward${suffix}.json`,{...qualitySummary(candidates,now),signalRuleRevision:revision});
+ }
  const matured=Object.values(records).filter(r=>r.outcomes[5]).length;
  const runtime={checkedAt:new Date(now).toISOString(),records:Object.keys(records).length,candidateRecords:Object.keys(observed).length,matured,attempted,failed,status:model?'shadow_trained':'collecting',affectsLiveSelection:false};
  await save('fast-runtime.json',runtime);console.log(JSON.stringify(runtime));

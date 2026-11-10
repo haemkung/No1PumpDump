@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {mergeClosed,usableBars} from './fast-stream.mjs';
+import {fastReversal} from './fast-reversal.mjs';
+const t=1800000000000;
+const rows=Array.from({length:22},(_,i)=>{const at=t-(22-i)*60000;const [o,h,l,c,q,b]=i===20?[103.48,103.56,100.48,100.84,392000,172480]:i===21?[100.84,103.32,100.8,102.6,183000,127734]:[103,108.4,102.16,103,120000,60000];return [at,o,h,l,c,100,at+59999,q,1,0,b];});
+assert.equal(fastReversal('X',rows,t).confirmation.ruleRevision,'shock55-bounce60-v2');
+const weak=structuredClone(rows);weak[20][10]=392000*.46;assert.equal(fastReversal('X',weak,t),null);
+const weakBounce=structuredClone(rows);weakBounce[21][10]=183000*.59;assert.equal(fastReversal('X',weakBounce,t),null);
+const short=rows.map(r=>[r[0],200-r[1],200-r[3],200-r[2],200-r[4],r[5],r[6],r[7],r[8],r[9],r[7]-r[10]]);
+assert.equal(fastReversal('X',short,t).seed.side,'SHORT');
+const current=[t,1,2,.5,1,1,t+59999,100,1,1,50];
+assert.equal(mergeClosed(rows,[current],t).length,22);
+assert.deepEqual(usableBars(mergeClosed(rows,rows,t),t-60000),rows);
+assert.equal(usableBars(rows.slice(1),t-60000),null);
+assert.equal(usableBars(rows,t),null);
+assert.equal(usableBars(rows.filter((_,i)=>i!==10),t-60000),null);
+console.log('Fast stream passed: closed-only, ordering, deduplication, missing-bar fallback, 55% shock and unchanged 60% bounce both sides');

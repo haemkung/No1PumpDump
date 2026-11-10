@@ -9,6 +9,9 @@ try{
   $localFeedRunning=$false
   try{$localFeedRunning=(Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:18741/watchlist.json' -TimeoutSec 2).StatusCode -eq 200}catch{}
   if(!$localFeedRunning){Start-Process -FilePath $node -ArgumentList ('"'+(Join-Path $PSScriptRoot 'watchlist-local.mjs')+'"') -WindowStyle Hidden}
+  $fastFeedRunning=$false
+  try{$fastFeedRunning=(Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:18742/health' -TimeoutSec 1).StatusCode -eq 200}catch{}
+  if(!$fastFeedRunning){Start-Process -FilePath $node -ArgumentList ('"'+(Join-Path $PSScriptRoot 'fast-stream.mjs')+'"') -WindowStyle Hidden}
   $groqPath=Join-Path $secretDir 'groq.xml'
   if(Test-Path -LiteralPath $groqPath){$env:GROQ_API_KEY=[Net.NetworkCredential]::new('',(Import-Clixml -LiteralPath $groqPath)).Password}
   $env:MONITOR_ORIGIN='local'
