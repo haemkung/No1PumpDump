@@ -1,425 +1,425 @@
 {
   "version": 1,
-  "checkedAt": "2026-11-12T10:00:20.751Z",
+  "checkedAt": "2026-11-12T18:16:20.882Z",
   "items": [
     {
-      "symbol": "BIRBUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T10:00:20.751Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "RIVERUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T10:00:20.527Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "TOSHIUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T10:00:20.306Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "OPENUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T10:00:20.087Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "AIOTUSDT",
+      "symbol": "PHAROSUSDT",
       "side": "SHORT",
       "market": "Binance Futures",
-      "at": "2026-11-12T10:00:19.868Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "LUMIAUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T10:00:19.650Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "WIFUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T10:00:19.429Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "ETHWUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T10:00:19.207Z",
+      "at": "2026-11-12T18:16:20.882Z",
       "reason": "quote_stop_or_cost"
     },
     {
       "symbol": "CGPTUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:16:20.659Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "FLOWUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:16:20.438Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "SKYUSDT",
       "side": "LONG",
       "market": "Binance Futures",
-      "at": "2026-11-12T09:59:20.265Z",
+      "at": "2026-11-12T18:15:19.798Z",
+      "reason": "opposing_btc_trend"
+    },
+    {
+      "symbol": "ASRUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:15:19.580Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "GRAMUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:14:20.175Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "MOCAUSDT",
+      "side": "LONG",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:14:19.955Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "BANDUSDT",
+      "side": "LONG",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:14:19.736Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "ARXUSDT",
+      "side": "LONG",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:13:19.943Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "MONUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:13:19.716Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "BNBUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:12:25.283Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "ROBOUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:12:24.867Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "SQDUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:12:24.653Z",
       "reason": "quote_stop_or_cost"
     },
     {
       "symbol": "FLUXUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:12:24.069Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "SYNUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:12:23.671Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "RIFUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:12:23.270Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "XLMUSDT",
       "side": "LONG",
       "market": "Binance Futures",
-      "at": "2026-11-12T09:59:20.045Z",
+      "at": "2026-11-12T18:12:22.874Z",
+      "reason": "opposing_btc_trend"
+    },
+    {
+      "symbol": "BILLUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:12:22.468Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "STABLEUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:12:22.059Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "BTRUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:12:21.622Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "NEWTUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:12:21.404Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "SOONUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:12:21.185Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "CETUSUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:12:20.967Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "WUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:12:20.740Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "ZRXUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:11:30.390Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "BNBUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:11:30.176Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "ARXUSDT",
+      "side": "LONG",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:11:29.959Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "NAORISUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:11:29.309Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "HAEDALUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:11:28.875Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "DOLOUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:11:28.652Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "BABYUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:11:28.218Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "SHELLUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:11:28.002Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "TSTUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:11:27.787Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "CETUSUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:11:27.570Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "METISUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:11:27.136Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "DYMUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:11:26.920Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "XAIUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:11:26.704Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "ETHWUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:11:26.490Z",
       "reason": "quote_stop_or_cost"
     },
     {
       "symbol": "GMXUSDT",
-      "side": "LONG",
+      "side": "SHORT",
       "market": "Binance Futures",
-      "at": "2026-11-12T09:59:19.828Z",
+      "at": "2026-11-12T18:11:26.273Z",
       "reason": "quote_stop_or_cost"
     },
     {
-      "symbol": "QNTUSDT",
-      "side": "LONG",
+      "symbol": "GALAUSDT",
+      "side": "SHORT",
       "market": "Binance Futures",
-      "at": "2026-11-12T09:59:19.606Z",
-      "reason": "opposing_btc_trend"
-    },
-    {
-      "symbol": "GTCUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:59:19.160Z",
-      "reason": "opposing_btc_trend"
-    },
-    {
-      "symbol": "EDGEUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:58:21.347Z",
-      "reason": "opposing_btc_trend"
-    },
-    {
-      "symbol": "FRAXUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:58:21.128Z",
+      "at": "2026-11-12T18:11:26.058Z",
       "reason": "quote_stop_or_cost"
     },
     {
-      "symbol": "CYSUSDT",
-      "side": "LONG",
+      "symbol": "CELOUSDT",
+      "side": "SHORT",
       "market": "Binance Futures",
-      "at": "2026-11-12T09:58:20.908Z",
+      "at": "2026-11-12T18:11:25.844Z",
       "reason": "quote_stop_or_cost"
     },
     {
-      "symbol": "ONDOUSDT",
-      "side": "LONG",
+      "symbol": "NEOUSDT",
+      "side": "SHORT",
       "market": "Binance Futures",
-      "at": "2026-11-12T09:58:20.687Z",
-      "reason": "opposing_btc_trend"
-    },
-    {
-      "symbol": "MANTAUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:58:20.465Z",
+      "at": "2026-11-12T18:11:25.412Z",
       "reason": "quote_stop_or_cost"
     },
     {
-      "symbol": "POWRUSDT",
-      "side": "LONG",
+      "symbol": "FOGOUSDT",
+      "side": "SHORT",
       "market": "Binance Futures",
-      "at": "2026-11-12T09:58:20.245Z",
+      "at": "2026-11-12T18:11:24.367Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "RAVEUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:11:24.148Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "LAYERUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:11:23.334Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "CGPTUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:11:22.938Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "GUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:11:22.536Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "MEWUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:11:22.130Z",
       "reason": "quote_stop_or_cost"
     },
     {
       "symbol": "BSVUSDT",
-      "side": "LONG",
+      "side": "SHORT",
       "market": "Binance Futures",
-      "at": "2026-11-12T09:58:20.025Z",
+      "at": "2026-11-12T18:11:21.734Z",
       "reason": "quote_stop_or_cost"
     },
     {
-      "symbol": "SSVUSDT",
-      "side": "LONG",
+      "symbol": "AGLDUSDT",
+      "side": "SHORT",
       "market": "Binance Futures",
-      "at": "2026-11-12T09:58:19.802Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "METUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:57:23.991Z",
-      "reason": "opposing_btc_trend"
-    },
-    {
-      "symbol": "SPKUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:57:23.770Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "KERNELUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:57:23.536Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "BRETTUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:57:23.317Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "KASUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:57:23.096Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "LUNA2USDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:57:22.871Z",
+      "at": "2026-11-12T18:11:21.338Z",
       "reason": "quote_stop_or_cost"
     },
     {
       "symbol": "CTSIUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:57:22.649Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "ZBTUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:56:10.721Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "SAPIENUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:56:10.500Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "PLAYUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:56:10.277Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "KERNELUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:56:10.053Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "MOVEUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:56:09.831Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "YGGUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:56:09.609Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "TLMUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:56:09.388Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "ACHUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:56:09.168Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "ENSUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:56:08.948Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "KMNOUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:55:18.961Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "FRAXUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:54:20.053Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "CYSUSDT",
       "side": "SHORT",
       "market": "Binance Futures",
-      "at": "2026-11-12T09:54:19.465Z",
+      "at": "2026-11-12T18:11:21.115Z",
       "reason": "quote_stop_or_cost"
     },
     {
-      "symbol": "ZBTUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:54:18.878Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "FOLKSUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:52:20.646Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "AKEUSDT",
+      "symbol": "ARPAUSDT",
       "side": "SHORT",
       "market": "Binance Futures",
-      "at": "2026-11-12T09:52:20.427Z",
-      "reason": "reclaim_lost"
-    },
-    {
-      "symbol": "MUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:52:20.203Z",
+      "at": "2026-11-12T18:11:20.897Z",
       "reason": "quote_stop_or_cost"
     },
     {
-      "symbol": "PROMUSDT",
-      "side": "LONG",
+      "symbol": "C98USDT",
+      "side": "SHORT",
       "market": "Binance Futures",
-      "at": "2026-11-12T09:52:19.982Z",
-      "reason": "reclaim_lost"
-    },
-    {
-      "symbol": "PHAROSUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:51:18.974Z",
+      "at": "2026-11-12T18:11:20.676Z",
       "reason": "quote_stop_or_cost"
     },
     {
-      "symbol": "AXSUSDT",
-      "side": "LONG",
+      "symbol": "RVNUSDT",
+      "side": "SHORT",
       "market": "Binance Futures",
-      "at": "2026-11-12T09:50:20.041Z",
+      "at": "2026-11-12T18:11:20.459Z",
       "reason": "quote_stop_or_cost"
     },
     {
-      "symbol": "NEARUSDT",
-      "side": "LONG",
+      "symbol": "GRAMUSDT",
+      "side": "SHORT",
       "market": "Binance Futures",
-      "at": "2026-11-12T09:50:19.816Z",
+      "at": "2026-11-12T18:10:21.610Z",
       "reason": "quote_stop_or_cost"
     },
     {
-      "symbol": "AIAUSDT",
-      "side": "LONG",
+      "symbol": "GPSUSDT",
+      "side": "SHORT",
       "market": "Binance Futures",
-      "at": "2026-11-12T09:50:19.586Z",
+      "at": "2026-11-12T18:10:21.394Z",
       "reason": "quote_stop_or_cost"
     },
     {
-      "symbol": "LSKUSDT",
+      "symbol": "ACTUSDT",
       "side": "LONG",
       "market": "Binance Futures",
-      "at": "2026-11-12T09:50:19.361Z",
-      "reason": "opposing_btc_trend"
-    },
-    {
-      "symbol": "ONTUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:49:20.180Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "SENTUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:49:19.961Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "XPINUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:49:19.738Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "SPKUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:49:19.515Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "NILUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:49:19.292Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "1INCHUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:49:19.070Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "RUNEUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:48:29.606Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "ALGOUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:48:29.387Z",
-      "reason": "quote_stop_or_cost"
-    },
-    {
-      "symbol": "IOTAUSDT",
-      "side": "LONG",
-      "market": "Binance Futures",
-      "at": "2026-11-12T09:48:29.167Z",
+      "at": "2026-11-12T18:10:21.178Z",
       "reason": "opposing_btc_trend"
     },
     {
       "symbol": "TRXUSDT",
       "side": "LONG",
       "market": "Binance Futures",
-      "at": "2026-11-12T09:48:28.947Z",
+      "at": "2026-11-12T18:10:20.961Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "CYSUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:10:20.737Z",
+      "reason": "quote_stop_or_cost"
+    },
+    {
+      "symbol": "SUNUSDT",
+      "side": "SHORT",
+      "market": "Binance Futures",
+      "at": "2026-11-12T18:10:20.304Z",
       "reason": "quote_stop_or_cost"
     }
   ]
